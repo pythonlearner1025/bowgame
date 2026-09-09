@@ -121,6 +121,7 @@ export class BowGameRuntime {
     message = '';
     messageUntil = 0;
     active = false;
+    hadPointerLock = false;
     sounds = null;
     constructor(viewer, config, arenaRoot, isPaused = () => false, ownsArena = false) {
         this.viewer = viewer;
@@ -218,6 +219,7 @@ export class BowGameRuntime {
         this.keys.clear();
         this.preview = null;
         this.active = false;
+        this.hadPointerLock = false;
         this.running = false;
         this.overlay?.remove();
         this.overlay = null;
@@ -370,11 +372,14 @@ export class BowGameRuntime {
         this.cancelFrom = this.sampleLivePose();
         this.cancelTime = 0;
     } this.drawing = false; this.charge = 0; this.queuedDraw = false; this.aiming = false; this.active = false; this.sounds?.suspend(); };
-    onLock = () => { if (document.pointerLockElement !== this.viewer.canvas) {
-        this.onBlur();
+    onLock = () => { if (document.pointerLockElement === this.viewer.canvas) {
+        this.hadPointerLock = true;
+        this.active = true;
     }
-    else
-        this.active = true; };
+    else if (this.hadPointerLock) {
+        this.hadPointerLock = false;
+        this.onBlur();
+    } };
     firePlayer(pose, charge) {
         // The rendered arrowhead is the sight: launch from that same point along its camera ray.
         this.updateCamera();

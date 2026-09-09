@@ -8,7 +8,6 @@ export class BowPerformance {
     renderMs = 0;
     calls = 0;
     triangles = 0;
-    autoReset = true;
     gpuMs = null;
     query = null;
     pending = [];
@@ -23,10 +22,6 @@ export class BowPerformance {
         viewer.addEventListener('postRender', this.afterRender);
     }
     beforeRender = () => {
-        const renderer = this.viewer.renderManager.renderer;
-        this.autoReset = renderer.info.autoReset;
-        renderer.info.autoReset = false;
-        renderer.info.reset();
         this.renderStart = performance.now();
         if (!this.extension)
             return;
@@ -48,7 +43,6 @@ export class BowPerformance {
         const renderer = this.viewer.renderManager.renderer;
         this.calls = renderer.info.render.calls;
         this.triangles = renderer.info.render.triangles;
-        renderer.info.autoReset = this.autoReset;
         if (this.query) {
             this.gl.endQuery(this.extension.TIME_ELAPSED_EXT);
             this.pending.push(this.query);

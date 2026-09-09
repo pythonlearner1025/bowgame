@@ -2,14 +2,14 @@ import type {ThreeViewer} from 'threepipe';
 type Sample={at:number;dt:number;cpu:number;active:boolean;visible:boolean;rendered:number};
 /** Read-only real-frame telemetry; explicit screenshot frames never count as game FPS. */
 export class BowPerformance {
-    private rendered=0;private previousRendered=0;private samples:Sample[]=[];private renderStart=0;private renderMs=0;private calls=0;private triangles=0;private autoReset=true;
+    private rendered=0;private previousRendered=0;private samples:Sample[]=[];private renderStart=0;private renderMs=0;private calls=0;private triangles=0;
     private gpuMs:number|null=null;private query:any=null;private pending:any[]=[];private frames=0;private gl:any;private extension:any;
     constructor(private viewer:ThreeViewer){
         this.gl=viewer.renderManager.renderer.getContext();this.extension=this.gl.getExtension('EXT_disjoint_timer_query_webgl2');
         viewer.addEventListener('preRender',this.beforeRender);viewer.addEventListener('postRender',this.afterRender);
     }
     private beforeRender=()=>{
-        const renderer=this.viewer.renderManager.renderer;this.autoReset=renderer.info.autoReset;renderer.info.autoReset=false;renderer.info.reset();this.renderStart=performance.now();
+        this.renderStart=performance.now();
         if(!this.extension)return;const gl=this.gl,ext=this.extension;
         while(this.pending.length&&gl.getQueryParameter(this.pending[0],gl.QUERY_RESULT_AVAILABLE)){
             const query=this.pending.shift();if(!gl.getParameter(ext.GPU_DISJOINT_EXT))this.gpuMs=gl.getQueryParameter(query,gl.QUERY_RESULT)/1e6;gl.deleteQuery(query);
@@ -20,7 +20,7 @@ export class BowPerformance {
     };
     private afterRender=()=>{
         this.rendered++;this.renderMs=performance.now()-this.renderStart;const renderer=this.viewer.renderManager.renderer;
-        this.calls=renderer.info.render.calls;this.triangles=renderer.info.render.triangles;renderer.info.autoReset=this.autoReset;
+        this.calls=renderer.info.render.calls;this.triangles=renderer.info.render.triangles;
         if(this.query){this.gl.endQuery(this.extension.TIME_ELAPSED_EXT);this.pending.push(this.query);this.query=null;}
     };
     record(at:number,dt:number,cpu:number,active:boolean){

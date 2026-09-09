@@ -48,7 +48,7 @@ export class BowGameRuntime {
     private player=new Vector3(); private velocity=new Vector3(); private hp=100; private kills=0; private deaths=0; private deadUntil=0; private elapsed=0; private winner='';
     private yaw=0; private pitch=0; private keys=new Set<string>(); private drawing=false; private charge=0; private recoil=0; private releaseTime=-1; private releasedCharge=0; private leftArm?:ArmRig; private rightArm?:ArmRig; private posePhase='ready'; private cooldown=0; private aiming=false; private aimBlend=0; private queuedDraw=false; private releaseFrom:ReferencePose|null=null; private cancelFrom:ReferencePose|null=null; private cancelTime=-1;
     private accumulator=0; private overlay:HTMLDivElement|null=null; private hud:Record<string,HTMLElement>={}; private bow=new Group(); private heldArrow=new Group(); private arm=new Group(); private hand=new Group();
-    private cameraRestore:any; private sceneRestore:any; private hidden:{object:any;visible:boolean}[]=[]; private flash=0; private hit=0; private message=''; private messageUntil=0; private active=false; private sounds:BowAudio|null=null;
+    private cameraRestore:any; private sceneRestore:any; private hidden:{object:any;visible:boolean}[]=[]; private flash=0; private hit=0; private message=''; private messageUntil=0; private active=false; private hadPointerLock=false; private sounds:BowAudio|null=null;
     constructor(private viewer:ThreeViewer,config?:BowGameConfig,private arenaRoot?:Group,private isPaused:()=>boolean=()=>false,private ownsArena=false){this.config=config;}
     isConfigured(){return !!this.config;}
     async start(){
@@ -79,7 +79,7 @@ export class BowGameRuntime {
         this.performanceStats?.dispose();this.performanceStats=null;
         window.removeEventListener('keydown',this.onKeyDown,true);window.removeEventListener('keyup',this.onKeyUp,true);window.removeEventListener('mousedown',this.onMouseDown,true);window.removeEventListener('mouseup',this.onMouseUp,true);window.removeEventListener('mousemove',this.onMouseMove,true);window.removeEventListener('blur',this.onBlur);document.removeEventListener('pointerlockchange',this.onLock);this.viewer.canvas.removeEventListener('contextmenu',this.onContext);
         if(document.pointerLockElement===this.viewer.canvas)document.exitPointerLock();
-        this.keys.clear();this.preview=null;this.active=false;this.running=false;this.overlay?.remove();this.overlay=null;this.hud={};
+        this.keys.clear();this.preview=null;this.active=false;this.hadPointerLock=false;this.running=false;this.overlay?.remove();this.overlay=null;this.hud={};
         this.trails?.dispose();this.trails=null;this.sceneBatch?.dispose();this.sceneBatch=null;disposeGroup(this.root);this.arrows=[];this.bots=[];this.hidden.forEach(s=>s.object.visible=s.visible);this.hidden=[];
         const viewer=this.viewer;if(viewer&&this.cameraRestore){const c=viewer.scene.mainCamera,s=this.cameraRestore;c.position.copy(s.position);c.quaternion.copy(s.quaternion);if(s.target)c.target?.copy(s.target);if(c.controls)c.controls.enabled=s.controls;(c as any).fov=s.fov;(c as any).updateProjectionMatrix?.();this.cameraRestore=null;}
         if(viewer&&this.sceneRestore){viewer.scene.background=this.sceneRestore.background;viewer.scene.fog=this.sceneRestore.fog;viewer.renderManager.renderScale=this.sceneRestore.renderScale;this.sceneRestore=null;viewer.setDirty();}
@@ -127,7 +127,7 @@ export class BowGameRuntime {
     };
     private onMouseMove=(e:MouseEvent)=>{if(!this.running||!this.active)return;if(document.pointerLockElement!==this.viewer.canvas&&!(e.buttons&1))return;this.yaw-=e.movementX*(this.aiming?.0011:.0018);this.pitch=Math.max(-1.25,Math.min(1.25,this.pitch-e.movementY*(this.aiming?.0011:.0018)));e.stopImmediatePropagation();};
     private onBlur=()=>{this.keys.clear();if(this.drawing&&this.charge>0){this.cancelFrom=this.sampleLivePose();this.cancelTime=0;}this.drawing=false;this.charge=0;this.queuedDraw=false;this.aiming=false;this.active=false;this.sounds?.suspend();};
-    private onLock=()=>{if(document.pointerLockElement!==this.viewer.canvas){this.onBlur();}else this.active=true;};
+    private onLock=()=>{if(document.pointerLockElement===this.viewer.canvas){this.hadPointerLock=true;this.active=true;}else if(this.hadPointerLock){this.hadPointerLock=false;this.onBlur();}};
 
     private firePlayer(pose:ReferencePose,charge:number){
         // The rendered arrowhead is the sight: launch from that same point along its camera ray.
