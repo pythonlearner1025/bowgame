@@ -1,0 +1,21 @@
+{
+  "bvh": {
+    "buildMs": 46.45849999999999,
+    "triangles": 89056,
+    "solidMeshes": 129,
+    "steps": 5790,
+    "meanStepMs": 0.014869878756475934,
+    "maxStepMs": 1.0679580000000328
+  },
+  "fourCapsuleStepMs": {
+    "p50": 0.0504579999999919,
+    "p95": 0.05608300000000099,
+    "max": 1.0856670000000008
+  },
+  "command": "npm test",
+  "tests": {
+    "total": 67,
+    "passed": 67,
+    "failed": 0
+  }
+}

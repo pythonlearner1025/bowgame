@@ -4,7 +4,7 @@
 
 This is a standalone Kite3D project containing the Timber / Ash local bot bow deathmatch. It was ported from `/Users/minjunes/Documents/ChatGPT/kite3d/upstream/packages/threepipe-blueprint-editor` and uses only public project/browser APIs from clean `threepipe@0.5.1`, commit `52c3ec1730463d935a582cf999c3eecb0ac63c14`.
 
-The 12 original `Bow*.ts` modules were copied to `src/`; `BowGameComponent.script.ts` is the project lifecycle adapter. The six modules that remain source-byte-identical are `BowArena.ts`, `BowArrowTrail.ts`, `BowPhysics.ts`, `BowReferenceClip.ts`, `BowSceneBatch.ts`, and `BowVisuals.ts`. In `BowAudio.ts`, `BowHumanAsset.ts`, `BowHandPose.ts`, and `BowHandRig.ts`, only project asset paths and browser `.js` import suffixes changed. `BowPerformance.ts` retains telemetry but no longer disables the renderer’s required `info.autoReset` flag. `BowGameRuntime.ts` contains the lifecycle/host refactor described below; its gameplay and tuning constants are unchanged.
+The 12 original `Bow*.ts` modules were copied to `src/`; `BowGameComponent.script.ts` is the project lifecycle adapter. The five modules that remain source-byte-identical are `BowArrowTrail.ts`, `BowPhysics.ts`, `BowReferenceClip.ts`, `BowSceneBatch.ts`, and `BowVisuals.ts`. In `BowAudio.ts`, `BowHumanAsset.ts`, `BowHandPose.ts`, and `BowHandRig.ts`, only project asset paths and browser `.js` import suffixes changed. `BowPerformance.ts` retains telemetry but no longer disables the renderer’s required `info.autoReset` flag. `BowGameRuntime.ts` contains the lifecycle/host refactor described below; its tuning constants are unchanged, with the requested mesh collision and parkour behavior documented below.
 
 ## Structural changes from the editor implementation
 
@@ -14,15 +14,15 @@ The 12 original `Bow*.ts` modules were copied to `src/`; `BowGameComponent.scrip
 - Replaced editor asset URLs with `/kite/assets/...`; recorded-audio caching/decoding/playback behavior is otherwise unchanged.
 - Added cancellation-safe async startup and complete runtime arena/listener/DOM/audio/render/camera cleanup for stop/HMR.
 - Kept Escape behavior after a real pointer lock. If initial pointer lock is unavailable, play continues with the existing drag-to-aim path and an on-screen notice.
-- Compiled TypeScript into committed raw ES modules in `scripts/`; relative imports end in `.js`, and `threepipe` is the only bare import.
+- Compiled TypeScript into committed raw ES modules in `scripts/`; relative imports end in `.js`, and bare imports are limited to `threepipe`, its shared `three` dependency, and pinned `three-mesh-bvh`.
 - Added a local Vite player that registers `BowGameComponent` before loading the GLB and starts both `EntityComponentPlugin` and the viewer timeline.
 - Adapted only the filesystem/viewer harness portions of the 45 original tests; their assertions and count remain intact.
 
-No multiplayer, networking, new gameplay, re-tuning, content replacement, or engine/editor source edit is included.
+The initial port excluded multiplayer and gameplay changes. Subsequent multiplayer and collision changes are documented below; engine/editor source remains unmodified.
 
 ## Scene strategy and visible equivalence
 
-`assets/main.scene.glb` is the documented fallback: a 396-byte GLB holding one empty authored group, `K3D_BOW_DEMO_ARENA`, with serialized component state and a runtime-only marker. Baking the procedural instanced arena would make GLB round-tripping lossy and duplicate large generated content. At component start, the verbatim `buildBowArena()` runs from the same initial seed `73429`; its group is marked `K3D_BOW_RUNTIME_ARENA` and disposed on stop.
+`assets/main.scene.glb` is the documented fallback: a 396-byte GLB holding one empty authored group, `K3D_BOW_DEMO_ARENA`, with serialized component state and a runtime-only marker. Baking the procedural instanced arena would make GLB round-tripping lossy and duplicate large generated content. At component start, the seeded `buildBowArena()` runs from the same initial seed `73429`; its group is marked `K3D_BOW_RUNTIME_ARENA` and disposed on stop.
 
 The browser evidence records 134 arena objects, 133 meshes, four instanced meshes, 6,720 needle boughs, 1,680 branches, 3,400 grasses, and 160 pebbles. Runtime batching saw 91 original meshes and made 28 batches. See [e2e-run.json](evidence/e2e-run.json) and the real rendered capture [solo-arena.png](evidence/solo-arena.png).
 
@@ -96,6 +96,16 @@ Build and deploy from `/private/tmp/bowgame` with `npm run build && npx wrangler
 The player cap and score limit are centralized as `BOW_ROOM_CAP` and `BOW_SCORE_LIMIT` in `src/BowProtocol.ts`; change them there, run `npm test`, `npm run e2e:online`, rebuild, and deploy. `wrangler.jsonc` pins the Worker name, account, static assets, `BOW_ROOM` binding, SQLite migration, current compatibility date, and observability.
 
 ## Changelog
+
+### 2026-09-09 — solid surfaces and parkour (requested gameplay change)
+
+Solid objects now collide as they look. Arrows stick to the visible triangles of rocks, boulders, walls, crates, shelter posts and roof, barricade planks, fallen timber, and tree trunks. The player and solo bots use the same static mesh collider; players can jump onto supported tops, stand there, slide along walls, and fall when walking off an edge. Foliage boughs and branches, grass, and pebbles stay walk-through. The old invisible 27 m movement boundary is gone. The visible floor at y=-0.04 now determines foot height; eye offset, movement/sprint/draw speeds, jump impulse, controls, and shot hit volumes are unchanged.
+
+One `three-mesh-bvh@0.9.5` tree contains 89,056 world-space triangles from 129 solid mesh instances, built before render batching hides source meshes. The final full Node run built it in **46.46 ms**; the cached Chromium solo run took **40.90 ms**, including geometry collection and BVH construction. A 1,200-step Node benchmark resolving four capsules per step measured **0.0505 ms p50 / 0.0561 ms p95 / 1.0857 ms max**. Browser capsule resolution averaged **0.00828 ms per capsule call**, maximum **0.20 ms** in that sample. These are collision CPU costs, not total frame or GPU times.
+
+Spawn locations are checked against mesh surfaces and nudged to the nearest sampled supported position when blocked (25 cm search rings). For this arena, online slot 5 moves from its blocked original position to approximately `(3.763, -0.0399, -25.763)`. The zero-thickness shelter tarp supports landing but does not make the space beneath it a filled volume. Bots choose a temporary new destination after less than 20 cm displacement over 1.5 seconds; their aiming and difficulty tuning are unchanged.
+
+Validation now includes 67 Node tests, including reference triangle raycasts, rock blocking, crate landing/edge falls, spawn clearance, instancing, steep slopes, nearest world/player hits, and visual-only remote arrows. The extended solo browser test holds real movement/jump keys and measures both local and remote arrow impacts against the original rock triangles. Its test-only hook requires `?collisionTest=1` and pauses only automatic simulation advancement during deterministic fixed-step bursts. Legacy cylinder helpers remain for geometry-free callers and existing isolated tests; hosted gameplay always builds and uses the BVH. `three` and its types link to the existing pinned engine installation, so no duplicate engine dependency tree or browser download was needed.
 
 ### 2026-09-09 — flicker and lag diagnostics
 

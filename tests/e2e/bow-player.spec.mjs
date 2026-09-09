@@ -11,7 +11,7 @@ test('hosted player enters the real arena and advances bot combat',async({page})
   page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
   page.on('pageerror',error=>pageErrors.push(error.message));
 
-  await page.goto('/');
+  await page.goto('/?collisionTest=1');
   await page.waitForFunction(()=>document.documentElement.dataset.playerReady==='true');
   const enter=page.getByRole('button',{name:'ENTER ARENA'});
   await expect(enter).toBeVisible();
@@ -47,10 +47,40 @@ test('hosted player enters the real arena and advances bot combat',async({page})
     'Forest scree':160,
   });
 
+  // Real key handlers feed the same 120 Hz step; deterministic bursts avoid software-WebGL wall-clock drift.
+  const collision=await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({position:[9,0,10],yaw:0,steps:2}));
+  expect(collision.stats.buildMs).toBeLessThan(300);
+  await page.keyboard.down('w');
+  const stopped=await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({steps:240}));
+  await page.keyboard.up('w');
+  expect(stopped.position[2]).toBeGreaterThan(6.5);
+  expect(stopped.position[2]).toBeLessThan(9);
+  expect(stopped.penetration).toBeLessThan(.01);
+  await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({position:[6.7,0,-2.35],yaw:0,steps:30}));
+  await page.keyboard.down('Space');await page.keyboard.down('w');
+  await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({steps:1}));
+  await page.keyboard.up('Space');
+  const airborne=await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({steps:51}));
+  await page.keyboard.up('w');
+  const landed=await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({steps:160}));
+  expect(airborne.position[1]).toBeGreaterThan(.7);
+  expect(landed.grounded,JSON.stringify({airborne,landed})).toBe(true);
+  expect(landed.position[1]).toBeGreaterThan(.9);
+  expect(landed.position[1]).toBeLessThan(1);
+  expect(landed.penetration).toBeLessThan(.01);
+  const impacts=[];
+  for(const remote of [false,true]){
+    const impact=await page.evaluate(remote=>window.__KITE_BOW_GAME__.runtime.collisionTest({position:[0,0,17],fire:{origin:[9,1.3,10],direction:[0,0,-1],remote},steps:12}),remote);
+    expect(impact.lastImpact).not.toBeNull();expect(impact.rockDistance).toBeLessThan(.02);impacts.push(impact);
+  }
+  expect(landed.spawns).toHaveLength(10);
+  for(const spawn of landed.spawns)expect(spawn.penetration).toBeLessThan(.001);
+  await page.evaluate(()=>window.__KITE_BOW_GAME__.runtime.collisionTest({resume:true}));
   const evidenceDir=resolve(root,'evidence');
   await mkdir(evidenceDir,{recursive:true});
   await page.locator('#bow-canvas').screenshot({path:resolve(evidenceDir,'solo-arena.png')});
   const log={
+    collision:{initial:collision,stopped,airborne,landed,impacts},
     url:page.url(),
     bots:after.bots.length,
     elapsed:after.elapsed,
