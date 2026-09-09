@@ -57,7 +57,9 @@ test('ballistic drop and swept impact resolve a full-charge hit at 20m', () => {
   for (let i = 0; i < 60; i++) {
     value.y -= GRAVITY / 120;
     const quaternion = { x: 0, y: point.y + value.y / 120, z: point.z + value.z / 120 };
-    if (segmentSphere(point, quaternion, { x: 0, y: 1.6, z: -20 }, 0.24) !== null) hit = true;
+    if (segmentSphere(point, quaternion, { x: 0, y: 1.6, z: -20 }, 0.24) !== null) {
+      hit = true;
+    }
     point = quaternion;
   }
 

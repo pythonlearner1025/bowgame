@@ -10,7 +10,9 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   const consoleErrors = [];
   const pageErrors = [];
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() === 'error') {
+      consoleErrors.push(message.text());
+    }
   });
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
@@ -39,7 +41,9 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
     const stats = { objects: 0, meshes: 0, instancedMeshes: 0, instances: {} };
     arena?.traverse((object) => {
       stats.objects++;
-      if (object.isMesh) stats.meshes++;
+      if (object.isMesh) {
+        stats.meshes++;
+      }
 
       if (object.isInstancedMesh) {
         stats.instancedMeshes++;
@@ -110,7 +114,9 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   }
 
   expect(landed.spawns).toHaveLength(10);
-  for (const spawn of landed.spawns) expect(spawn.penetration).toBeLessThan(0.001);
+  for (const spawn of landed.spawns) {
+    expect(spawn.penetration).toBeLessThan(0.001);
+  }
   await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ resume: true }));
   const evidenceDir = resolve(root, 'evidence');
   await mkdir(evidenceDir, { recursive: true });

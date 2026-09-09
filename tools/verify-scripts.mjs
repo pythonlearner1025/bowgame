@@ -27,17 +27,21 @@ for (const filename of entries) {
   const path = join(root, 'scripts', filename);
   const source = await readFile(path, 'utf8');
   await transform(source, { loader: 'js', format: 'esm', target: 'es2022' });
-  if (/(?:from\s*|import\s*)['"][^'"]+\.ts['"]/.test(source))
+  if (/(?:from\s*|import\s*)['"][^'"]+\.ts['"]/.test(source)) {
     throw new Error(`${filename}: TypeScript import remains`);
+  }
   const specifiers = [...source.matchAll(/(?:from\s*|import\s*)['"]([^'"]+)['"]/g)].map(
     (match) => match[1],
   );
 
   for (const specifier of specifiers) {
     imports++;
-    if (['threepipe', 'three', 'three-mesh-bvh'].includes(specifier)) continue;
-    if (!/^\.\/.+\.js$/.test(specifier))
+    if (['threepipe', 'three', 'three-mesh-bvh'].includes(specifier)) {
+      continue;
+    }
+    if (!/^\.\/.+\.js$/.test(specifier)) {
       throw new Error(`${filename}: unsupported import ${specifier}`);
+    }
     const imported = resolve(dirname(path), specifier);
     await stat(imported).catch(() => {
       throw new Error(`${filename}: missing relative import ${relative(root, imported)}`);

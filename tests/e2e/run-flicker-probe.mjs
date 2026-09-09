@@ -29,11 +29,15 @@ async function waitForWorker(url, child) {
   const deadline = Date.now() + 25_000;
 
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`wrangler dev exited with ${child.exitCode}`);
+    if (child.exitCode !== null) {
+      throw new Error(`wrangler dev exited with ${child.exitCode}`);
+    }
 
     try {
       const response = await fetch(url);
-      if (response.ok) return;
+      if (response.ok) {
+        return;
+      }
     } catch (error) {
       console.warn('Flicker probe is still waiting for the local Worker.', error);
     }
@@ -45,13 +49,17 @@ async function waitForWorker(url, child) {
 }
 
 async function stopWorker(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child || child.exitCode !== null) {
+    return;
+  }
   child.kill('SIGTERM');
   await Promise.race([
     new Promise((ok) => child.once('exit', ok)),
     new Promise((ok) => setTimeout(ok, 3000)),
   ]);
-  if (child.exitCode === null) child.kill('SIGKILL');
+  if (child.exitCode === null) {
+    child.kill('SIGKILL');
+  }
 }
 
 async function launchBrowser() {
@@ -89,22 +97,27 @@ async function launchBrowser() {
 async function enter(page, path, name) {
   const errors = [];
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'error') {
+      errors.push(message.text());
+    }
   });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(path);
   await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true', {
     timeout: 30_000,
   });
-  if (path.includes('online=1'))
+  if (path.includes('online=1')) {
     await page.waitForFunction(
       () => window.__KITE_BOW_GAME__?.getState()?.network?.status === 'connected',
       { timeout: 30_000 },
     );
+  }
   await page.evaluate((value) => {
     const canvas = document.querySelector('#bow-canvas');
     canvas.requestPointerLock = () => Promise.reject(new Error('probe disables pointer lock'));
-    if (value && window.__KITE_BOW_SESSION__) window.__KITE_BOW_SESSION__.setName(value);
+    if (value && window.__KITE_BOW_SESSION__) {
+      window.__KITE_BOW_SESSION__.setName(value);
+    }
     window.__KITE_BOW_GAME__.runtime.enter();
   }, name);
   await page.waitForTimeout(1000);
@@ -123,7 +136,9 @@ async function capture(page, scenario) {
     copy.width = width;
     copy.height = height;
     const context = copy.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error('2D capture context unavailable');
+    if (!context) {
+      throw new Error('2D capture context unavailable');
+    }
     let domMutations = 0,
       preRenders = 0,
       postRenders = 0,
@@ -131,13 +146,14 @@ async function capture(page, scenario) {
     const observer = new MutationObserver((records) => {
       domMutations += records.length;
     });
-    if (hud)
+    if (hud) {
       observer.observe(hud, {
         attributes: true,
         characterData: true,
         childList: true,
         subtree: true,
       });
+    }
     const onPre = () => preRenders++,
       onPost = () => postRenders++,
       onResize = () => resizes++;
@@ -201,7 +217,9 @@ async function capture(page, scenario) {
               parent = parent.parent;
             }
 
-            if (visible) visibleMeshes++;
+            if (visible) {
+              visibleMeshes++;
+            }
           }
         });
         const runtimeRoots = viewer.scene.children.filter(
@@ -209,7 +227,9 @@ async function capture(page, scenario) {
         ).length;
         const arenaRoots = [];
         viewer.scene.traverse((object) => {
-          if (object.name === 'K3D_BOW_RUNTIME_ARENA') arenaRoots.push(object.uuid);
+          if (object.name === 'K3D_BOW_RUNTIME_ARENA') {
+            arenaRoots.push(object.uuid);
+          }
         });
         frames.push({
           index,
@@ -264,7 +284,9 @@ async function capture(page, scenario) {
             remotePlayers: state.remotePlayers.length,
           },
         });
-        if (selectedAt.has(index)) selected.push({ index, url: copy.toDataURL('image/png') });
+        if (selectedAt.has(index)) {
+          selected.push({ index, url: copy.toDataURL('image/png') });
+        }
         previous = new Uint8ClampedArray(pixels);
         lastAt = at;
       }
@@ -444,7 +466,9 @@ try {
       2,
     ),
   );
-  if (errors.length) process.exitCode = 1;
+  if (errors.length) {
+    process.exitCode = 1;
+  }
 } finally {
   await browser?.close();
   await stopWorker(worker);

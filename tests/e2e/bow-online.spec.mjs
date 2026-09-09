@@ -18,16 +18,19 @@ class SocketProbe {
       const message = JSON.parse(String(event.data));
       this.messages.push(message);
 
-      for (const waiter of [...this.waiters])
+      for (const waiter of [...this.waiters]) {
         if (waiter.type === message.type) {
           this.waiters.splice(this.waiters.indexOf(waiter), 1);
           waiter.resolve(message);
         }
+      }
     });
   }
   opened() {
     return new Promise((resolve, reject) => {
-      if (this.socket.readyState === WebSocket.OPEN) return resolve();
+      if (this.socket.readyState === WebSocket.OPEN) {
+        return resolve();
+      }
       this.socket.addEventListener('open', resolve, { once: true });
       this.socket.addEventListener('error', () => reject(new Error('socket failed to open')), {
         once: true,
@@ -36,14 +39,18 @@ class SocketProbe {
   }
   waitFor(type, timeout = 10_000) {
     const found = this.messages.find((message) => message.type === type);
-    if (found) return Promise.resolve(found);
+    if (found) {
+      return Promise.resolve(found);
+    }
 
     return new Promise((resolve, reject) => {
       const waiter = { type, resolve };
       this.waiters.push(waiter);
       setTimeout(() => {
         const index = this.waiters.indexOf(waiter);
-        if (index >= 0) this.waiters.splice(index, 1);
+        if (index >= 0) {
+          this.waiters.splice(index, 1);
+        }
         reject(new Error(`timed out waiting for ${type}`));
       }, timeout);
     });
@@ -58,7 +65,9 @@ class SocketProbe {
 
 async function enterOnline(page, name, errors) {
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'error') {
+      errors.push(message.text());
+    }
   });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/?online=1');
@@ -113,10 +122,11 @@ test('two Chromium pages play, room limits hold, and rounds reset', async ({ bro
     () => Math.abs(window.__KITE_BOW_GAME__.getState().remotePlayers[0].position.z - 10) < 1,
     { timeout: 15_000 },
   );
-  if (mode === 'live')
+  if (mode === 'live') {
     await pageA
       .locator('#bow-canvas')
       .screenshot({ path: resolve(root, 'evidence/online-two-players.png') });
+  }
   await pageA.keyboard.press('F8');
   await expect(pageA.locator('#kite3d-bow-debug')).toBeVisible();
   const telemetry = await pageA.evaluate(() => window.__KITE_BOW_TELEMETRY__.exportData()),
@@ -178,7 +188,9 @@ test('two Chromium pages play, room limits hold, and rounds reset', async ({ bro
   await eleventh.opened();
   const full = await eleventh.waitFor('full');
   expect(full.type).toBe('full');
-  for (const probe of cap) probe.close();
+  for (const probe of cap) {
+    probe.close();
+  }
   eleventh.close();
 
   const roundRoom = `round-${Date.now()}`,
@@ -191,8 +203,9 @@ test('two Chromium pages play, room limits hold, and rounds reset', async ({ bro
   const ended = killer.waitFor('round_end'),
     reset = killer.waitFor('round_reset', 12_000),
     started = Date.now();
-  for (let i = 0; i < 20; i++)
+  for (let i = 0; i < 20; i++) {
     victim.send({ v: 1, type: 'death', killerId: killerWelcome.playerId });
+  }
   const roundEnd = await ended,
     roundReset = await reset;
   expect(roundEnd.scores[killerWelcome.playerId]).toBe(20);

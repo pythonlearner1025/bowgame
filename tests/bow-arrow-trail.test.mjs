@@ -158,8 +158,9 @@ test('cover clips trail and rendered arrow tip; impact tail decays', () => {
   assert.equal(arrow.stuck, true);
   const slot = game.trails.slots[arrow.trail.slot],
     count = slot.count;
-  for (let i = 0; i < count; i++)
+  for (let i = 0; i < count; i++) {
     assert.ok(slot.points[i].z >= -2.5 - 1e-6, 'trail cannot pass wall');
+  }
   game.root.updateMatrixWorld(true);
   assert.ok(
     arrow.mesh.localToWorld(new Vector3(0, 0, -0.765)).distanceTo(arrow.position) < 1e-8,
@@ -173,15 +174,18 @@ test('pool capacity, stale handles and disposal remain bounded', () => {
   const trails = new BowArrowTrails(),
     point = new Vector3(),
     old = trails.spawn(point, 0);
-  for (let i = 1; i < ARROW_TRAIL_CAPACITY + 20; i++) trails.spawn(point, i / 120);
+  for (let i = 1; i < ARROW_TRAIL_CAPACITY + 20; i++) {
+    trails.spawn(point, i / 120);
+  }
   assert.equal(trails.root.children.length, ARROW_TRAIL_CAPACITY);
   const reused = trails.slots[old.slot],
     count = reused.count;
   trails.sample(old, new Vector3(99, 99, 99), 4);
   assert.equal(reused.count, count);
   let disposed = 0;
-  for (const sample of trails.slots)
+  for (const sample of trails.slots) {
     sample.mesh.geometry.addEventListener('dispose', () => disposed++);
+  }
   trails.material.addEventListener('dispose', () => disposed++);
   trails.dispose();
   assert.equal(disposed, ARROW_TRAIL_CAPACITY + 1);
@@ -201,8 +205,9 @@ test('restart clears streaks and HUD has no crosshair or draw-progress bar', asy
 });
 test('bounded flight inspection advances real physics and reset removes projectile residue', () => {
   const { game } = harness();
-  for (const value of [-0.01, 1.01, NaN])
+  for (const value of [-0.01, 1.01, NaN]) {
     assert.throws(() => game.inspect({ flightSeconds: value }));
+  }
   game.inspect({ flightSeconds: 0.15, flightSide: true });
   assert.equal(game.arrows.length, 1);
   assert.ok(Math.abs(game.elapsed - 0.15) < 1e-9);

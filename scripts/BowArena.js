@@ -123,8 +123,9 @@ export function buildBowArena() {
     const rock = (x, z, radius, height, collision = true) => {
         const mesh = add(rockGeometry, random() > 0.4 ? stone : stoneDark, 'Weathered granite', x, height * 0.36 - 0.12, z, radius, height * 0.65, radius * (0.8 + random() * 0.3));
         mesh.rotation.y = random() * Math.PI;
-        if (collision)
+        if (collision) {
             obstacles.push({ x, z, r: radius * 0.95, height });
+        }
     };
     [
         [-8, 8, 2.2, 2.7],
@@ -234,8 +235,9 @@ export function buildBowArena() {
                 }
             }
         }
-        if (collision)
+        if (collision) {
             obstacles.push({ x, z, r: 0.5, height });
+        }
     };
     for (let i = 0; i < 34; i++) {
         const angle = (i / 34) * Math.PI * 2 + random() * 0.12;
@@ -278,8 +280,9 @@ export function buildBowArena() {
     wall(-8, -3.8, 3.8, Math.PI / 2, 1.7);
     const crate = (x, z, size) => {
         add(box, wood, 'Supply crate', x, size / 2, z, size, size, size);
-        for (const offset of [-0.36, 0.36])
+        for (const offset of [-0.36, 0.36]) {
             add(box, steel, 'Crate strap', x + size * offset, size / 2, z, 0.075, size + 0.03, size + 0.04);
+        }
         obstacles.push({ x, z, r: size * 0.68, height: size });
     };
     crate(5, -3.4, 1.2);
@@ -320,8 +323,9 @@ export function buildBowArena() {
     for (let i = 0; i < 4500 && grassCount < 3400; i++) {
         const x = (random() - 0.5) * 105, z = (random() - 0.5) * 105;
         // Worn central crossing and spawn area remain readable.
-        if (Math.abs(x) < 3.7 || Math.abs(z + 2) < 2.2 || Math.hypot(x, z - 17) < 3)
+        if (Math.abs(x) < 3.7 || Math.abs(z + 2) < 2.2 || Math.hypot(x, z - 17) < 3) {
             continue;
+        }
         matrix.position.set(x, 0, z);
         matrix.rotation.y = random() * Math.PI;
         matrix.scale.setScalar(0.5 + random() * 1.2);

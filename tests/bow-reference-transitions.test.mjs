@@ -134,11 +134,12 @@ test('the visible nocking hand and arrow remain together across the seating tran
       hand.distanceTo(nock) < 0.045,
       `nocking hand target is ${(hand.distanceTo(nock) * 100).toFixed(1)} cm from held arrow at ${seconds}s`,
     );
-    if (lastHand)
+    if (lastHand) {
       assert.ok(
         hand.distanceTo(lastHand) < 0.05,
         'seating the arrow must not teleport the pulling hand',
       );
+    }
     lastHand = hand;
   }
 });
@@ -225,9 +226,12 @@ test('the second reference reload does not rewind or hide its arrow at 9.45 seco
   for (let i = 1; i <= 35; i++) {
     const seconds = 9.35 + i * 0.01,
       current = sampleReferenceTimeline(seconds);
-    if (arrowHasAppeared)
+    if (arrowHasAppeared) {
       assert.equal(current.arrowVisible, true, `second reload arrow vanished again at ${seconds}s`);
-    if (current.arrowVisible) arrowHasAppeared = true;
+    }
+    if (current.arrowVisible) {
+      arrowHasAppeared = true;
+    }
     const grip = referenceScreenPoint(...current.grip),
       prior = referenceScreenPoint(...previous.grip);
     assert.ok(
@@ -258,7 +262,9 @@ test('a held LMB press during recovery starts the next draw when ready, while an
     game.onMouseDown(mouse(0));
     advance(0.2);
     assert.equal(game.drawing, false, 'cooldown must still prevent an early redraw');
-    if (releaseEarly) game.onMouseUp(mouse(0));
+    if (releaseEarly) {
+      game.onMouseUp(mouse(0));
+    }
     advance(0.6);
     assert.equal(
       game.drawing,
@@ -276,7 +282,9 @@ test('extra render frames do not advance the input-driven aim transition', () =>
   game.onMouseDown(mouse(2));
   advance(0.12);
   const before = game.bow.position.clone();
-  for (let i = 0; i < 100; i++) render();
+  for (let i = 0; i < 100; i++) {
+    render();
+  }
   assert.ok(
     game.bow.position.distanceTo(before) < 1e-9,
     'aim progress is simulation-time based, independent of display refresh rate',

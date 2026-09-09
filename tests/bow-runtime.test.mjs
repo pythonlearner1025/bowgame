@@ -113,7 +113,9 @@ function harness() {
 test('real WASD handlers move camera-relative, stop on keyup, and slide against cover', () => {
   const { game, key } = harness();
   game.onKeyDown(key('KeyW'));
-  for (let i = 0; i < 120; i++) game.step(1 / 120);
+  for (let i = 0; i < 120; i++) {
+    game.step(1 / 120);
+  }
   assert.ok(game.player.z < -4.4 && game.player.z > -4.6);
   game.onKeyUp(key('KeyW'));
   const stopped = game.player.clone();
@@ -126,13 +128,17 @@ test('real WASD handlers move camera-relative, stop on keyup, and slide against 
   game.player.set(0, 0, 0);
   game.yaw = 0;
   game.config.obstacles = [{ x: 0, z: -1, r: 0.5, height: 2 }];
-  for (let i = 0; i < 100; i++) game.step(1 / 120);
+  for (let i = 0; i < 100; i++) {
+    game.step(1 / 120);
+  }
   assert.ok(game.player.z > -0.13);
 });
 test('real draw/release handlers launch an arrow that hits a bot, awards kill, and ends match', () => {
   const { game, mouse } = harness();
   game.onMouseDown(mouse(0));
-  for (let i = 0; i < 150; i++) game.step(1 / 120);
+  for (let i = 0; i < 150; i++) {
+    game.step(1 / 120);
+  }
   assert.equal(game.charge, 1);
   const bot = game.createBot(0);
   bot.mesh.position.set(0, 0, -6);
@@ -142,7 +148,9 @@ test('real draw/release handlers launch an arrow that hits a bot, awards kill, a
   assert.equal(game.arrows[0].damage, 70);
   assert.equal(game.charge, 0);
   assert.equal(game.drawing, false);
-  for (let i = 0; i < 40; i++) game.stepArrows(1 / 120);
+  for (let i = 0; i < 40; i++) {
+    game.stepArrows(1 / 120);
+  }
   assert.equal(bot.hp, 0);
   assert.equal(bot.deaths, 1);
   assert.equal(game.kills, 1);
@@ -155,10 +163,14 @@ test('bot arrows damage the player, credit bot kills, and respawn without resett
   const bot = game.createBot(0);
   game.bots = [bot];
   game.fire(new Vector3(0, 1.05, -3), new Vector3(0, 0, 1), 0, 1);
-  for (let i = 0; i < 20; i++) game.stepArrows(1 / 120);
+  for (let i = 0; i < 20; i++) {
+    game.stepArrows(1 / 120);
+  }
   assert.equal(game.hp, 30);
   game.fire(new Vector3(0, 1.05, -3), new Vector3(0, 0, 1), 0, 1);
-  for (let i = 0; i < 20; i++) game.stepArrows(1 / 120);
+  for (let i = 0; i < 20; i++) {
+    game.stepArrows(1 / 120);
+  }
   assert.equal(game.hp, 0);
   assert.equal(game.deaths, 1);
   assert.equal(bot.kills, 1);
@@ -224,10 +236,14 @@ test('human skin geometry is finite, tapered and articulated at the elbow and kn
   const human = makeHuman();
   let count = 0;
   human.root.traverse((objectValue) => {
-    if (!objectValue.isMesh) return;
+    if (!objectValue.isMesh) {
+      return;
+    }
     count++;
     const point = objectValue.geometry.getAttribute('position');
-    for (const value of point.array) assert.ok(Number.isFinite(value));
+    for (const value of point.array) {
+      assert.ok(Number.isFinite(value));
+    }
   });
   assert.ok(count > 70);
   poseHuman(human, 0, 0);
@@ -241,12 +257,16 @@ test('human skin geometry is finite, tapered and articulated at the elbow and kn
 test('release recovery blocks firing until an arrow has been re-nocked', () => {
   const { game, mouse } = harness();
   game.onMouseDown(mouse(0));
-  for (let i = 0; i < 150; i++) game.step(1 / 120);
+  for (let i = 0; i < 150; i++) {
+    game.step(1 / 120);
+  }
   game.onMouseUp(mouse(0));
   game.onMouseDown(mouse(0));
   assert.equal(game.drawing, false);
   assert.equal(game.arrows.length, 1);
-  for (let i = 0; i < 127; i++) game.step(1 / 120);
+  for (let i = 0; i < 127; i++) {
+    game.step(1 / 120);
+  }
   game.onMouseDown(mouse(0));
   assert.equal(game.drawing, true);
   assert.equal(game.releaseTime, -1);
@@ -268,8 +288,9 @@ test('inspection rejects unsafe or unbounded values and never advances combat', 
     { referenceTime: 10.1 },
     { referenceTime: NaN },
     { aim: 'yes' },
-  ])
+  ]) {
     assert.throws(() => game.inspect(input));
+  }
   const before = game.getState();
   game.inspect({ view: 'first-person', draw: 1, release: 0.04 });
   assert.equal(game.active, false);
@@ -305,7 +326,9 @@ test('bundled CC0 adult skin has normalized influences and remains finite in dra
     human.applyPose(draw === 0);
     human.root.updateMatrixWorld(true);
     human.root.traverse((objectValue) => {
-      for (const count of objectValue.matrixWorld.elements) assert.ok(Number.isFinite(count));
+      for (const count of objectValue.matrixWorld.elements) {
+        assert.ok(Number.isFinite(count));
+      }
     });
   }
 
@@ -336,7 +359,9 @@ test('first-person CC0 arm preserves textured skinning and its wrist follows gri
 
     for (let i = 0; i < surface.geometry.attributes.skinWeight.count; i++) {
       let total = 0;
-      for (let j = 0; j < 4; j++) total += surface.geometry.attributes.skinWeight.array[i * 4 + j];
+      for (let j = 0; j < 4; j++) {
+        total += surface.geometry.attributes.skinWeight.array[i * 4 + j];
+      }
       assert.ok(Math.abs(total - 1) < 1e-5);
     }
 
@@ -510,7 +535,7 @@ test('the physical arrowhead is the full-draw sight and launches along its camer
     'wooden shaft joins the physical arrowhead without a visible gap',
   );
 
-  for (const aspect of [16 / 9, 2479 / 1537])
+  for (const aspect of [16 / 9, 2479 / 1537]) {
     for (const aim of [false, true]) {
       const { game, mouse } = harness();
       game.bow = makeFieldBow();
@@ -547,6 +572,7 @@ test('the physical arrowhead is the full-draw sight and launches along its camer
         'gravity lowers the visible flight after release',
       );
     }
+  }
 });
 
 test('real collision audio routes headshots, body hits, cover and once-per-arrow near misses', () => {
@@ -581,7 +607,9 @@ test('real collision audio routes headshots, body hits, cover and once-per-arrow
     game.bots = [game.createBot(0)];
     game.bots[0].mesh.position.set(0, 0, -3);
     game.fire(new Vector3(0, height, 0), new Vector3(0, 0, -1), -1, 1);
-    for (let i = 0; i < 15; i++) game.stepArrows(1 / 120);
+    for (let i = 0; i < 15; i++) {
+      game.stepArrows(1 / 120);
+    }
     assert.ok(events.includes(kind));
     assert.equal(events.includes('confirmation'), kind === 'head');
     assert.equal(events.includes('whizz'), false);
@@ -589,7 +617,9 @@ test('real collision audio routes headshots, body hits, cover and once-per-arrow
 
   const miss = setup();
   miss.game.fire(new Vector3(1, 1.6, -3), new Vector3(0, 0, 1), 0, 1);
-  for (let i = 0; i < 8; i++) miss.game.stepArrows(1 / 120);
+  for (let i = 0; i < 8; i++) {
+    miss.game.stepArrows(1 / 120);
+  }
   assert.equal(miss.events.filter((eventValue) => eventValue === 'whizz').length, 1);
   const cover = setup();
   cover.game.player.x = 10;

@@ -74,6 +74,7 @@ export default typescriptEslint.config(
   },
   eslint.configs.recommended,
   ...typescriptEslint.configs.recommended,
+  prettier,
   {
     files: ['**/*.{js,mjs,ts}'],
     languageOptions: {
@@ -129,24 +130,10 @@ export default typescriptEslint.config(
     },
   },
   {
-    files: ['tests/**/*.{js,mjs,ts}'],
-    rules: {
-      'max-lines-per-function': 'off',
-      'no-magic-numbers': 'off',
-    },
-  },
-  {
     files: ['**/*.{js,mjs}'],
     rules: {
       // JavaScript cannot express TypeScript return annotations; JSDoc remains mandatory.
       '@typescript-eslint/explicit-module-boundary-types': 'off',
     },
   },
-  {
-    files: ['eslint.config.js'],
-    rules: {
-      'no-magic-numbers': 'off',
-    },
-  },
-  prettier,
 );

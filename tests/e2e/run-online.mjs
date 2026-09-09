@@ -25,11 +25,15 @@ async function waitForWorker(url, child) {
   const deadline = Date.now() + 25_000;
 
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`wrangler dev exited with ${child.exitCode}`);
+    if (child.exitCode !== null) {
+      throw new Error(`wrangler dev exited with ${child.exitCode}`);
+    }
 
     try {
       const response = await fetch(url);
-      if (response.ok) return;
+      if (response.ok) {
+        return;
+      }
     } catch (error) {
       console.warn('Online E2E is still waiting for the local Worker.', error);
     }
@@ -41,13 +45,17 @@ async function waitForWorker(url, child) {
 }
 
 async function stopWorker(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child || child.exitCode !== null) {
+    return;
+  }
   child.kill('SIGTERM');
   await Promise.race([
     new Promise((resolve) => child.once('exit', resolve)),
     new Promise((resolve) => setTimeout(resolve, 3000)),
   ]);
-  if (child.exitCode === null) child.kill('SIGKILL');
+  if (child.exitCode === null) {
+    child.kill('SIGKILL');
+  }
 }
 
 try {
@@ -87,7 +95,9 @@ try {
     playwright.once('error', reject);
     playwright.once('exit', (value) => resolve(value ?? 1));
   });
-  if (code !== 0) process.exitCode = code;
+  if (code !== 0) {
+    process.exitCode = code;
+  }
 
   if (workerOutput.includes('"event":"exception"')) {
     console.error('wrangler emitted a structured room exception');

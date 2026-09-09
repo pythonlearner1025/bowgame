@@ -109,7 +109,9 @@ function fixture() {
 
 test('arrows meet actual weathered granite triangles within 1 cm of reference raycast', () => {
   arena.group.traverse((matrixValue) => {
-    if (matrixValue.isMesh) matrixValue.material.side = DoubleSide;
+    if (matrixValue.isMesh) {
+      matrixValue.material.side = DoubleSide;
+    }
   });
   const rocks = arena.group.children.filter(
     (matrixValue) => matrixValue.name === 'Weathered granite',
@@ -206,7 +208,9 @@ test('solid instancing expands world transforms; untagged decoration stays passa
   group.add(decoration);
   const candidate = new BowCollision(group);
   assert.equal(candidate.solidMeshes, 2);
-  for (const x of [3, 6]) assert.ok(candidate.segment(new Vector3(x, 1, 2), new Vector3(x, 1, -2)));
+  for (const x of [3, 6]) {
+    assert.ok(candidate.segment(new Vector3(x, 1, 2), new Vector3(x, 1, -2)));
+  }
   assert.equal(candidate.segment(new Vector3(12, 1, 2), new Vector3(12, 1, -2)), null);
   candidate.dispose();
 });
@@ -251,7 +255,9 @@ test('world and player hits compete by nearest distance; remote visuals never ap
   };
 
   const run = (game) => {
-    for (let i = 0; i < 20; i++) game.stepArrows(dt);
+    for (let i = 0; i < 20; i++) {
+      game.stepArrows(dt);
+    }
   };
 
   const blocked = setup();
@@ -283,7 +289,9 @@ test('world and player hits compete by nearest distance; remote visuals never ap
 test('all required arena parts are solid; foliage, grass and scree are excluded', () => {
   const names = new Set();
   arena.group.traverse((matrixValue) => {
-    if (matrixValue.isMesh && matrixValue.userData.bowSolid) names.add(matrixValue.name);
+    if (matrixValue.isMesh && matrixValue.userData.bowSolid) {
+      names.add(matrixValue.name);
+    }
   });
   assert.deepEqual(
     [...names].sort(),
@@ -308,14 +316,20 @@ test('real runtime jump input lands on the authored crate without a second jump'
   game.config = { obstacles: [], scoreLimit: 10 };
   game.collision = world;
   game.player.set(6.7, 0, -2.35);
-  for (let i = 0; i < 30; i++) game.step(dt);
+  for (let i = 0; i < 30; i++) {
+    game.step(dt);
+  }
   game.keys.add('Space');
   game.keys.add('KeyW');
   game.step(dt);
   game.keys.delete('Space');
-  for (let i = 0; i < 51; i++) game.step(dt);
+  for (let i = 0; i < 51; i++) {
+    game.step(dt);
+  }
   game.keys.clear();
-  for (let i = 0; i < 160; i++) game.step(dt);
+  for (let i = 0; i < 160; i++) {
+    game.step(dt);
+  }
   assert.ok(game.grounded);
   assert.ok(game.player.y > 0.9 && game.player.y < 1);
 });

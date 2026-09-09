@@ -178,7 +178,9 @@ function wavInfo(bytes) {
       bits = view.getUint16(i + 22, true);
     }
 
-    if (tag === 'data') length = size / ((channels * bits) / 8);
+    if (tag === 'data') {
+      length = size / ((channels * bits) / 8);
+    }
     i += 8 + size + (size % 2);
   }
 
@@ -220,8 +222,12 @@ class Context {
   }
   async decodeAudioData(bytes) {
     decodes++;
-    if (failDecode) throw new Error('decode rejected');
-    if (deferDecode) await new Promise((resolve) => deferred.push(resolve));
+    if (failDecode) {
+      throw new Error('decode rejected');
+    }
+    if (deferDecode) {
+      await new Promise((resolve) => deferred.push(resolve));
+    }
     const { channels, rate, length } = wavInfo(bytes);
 
     return { ...this.createBuffer(channels, length, rate), contextId: this.id };
@@ -261,7 +267,9 @@ test('audio has one context, bounded voices/loops, distinct head route, mute and
   );
   audio.draw(-1, 0.4);
   const drawStarts = audio.getState().played.draw;
-  for (let i = 0; i < 30; i++) audio.draw(-1, 0.8);
+  for (let i = 0; i < 30; i++) {
+    audio.draw(-1, 0.8);
+  }
   assert.equal(audio.getState().played.draw, drawStarts, 'charge updates must reuse one source');
   audio.draw(-1, 0);
   assert.equal(audio.getState().drawLoops, 0);
@@ -272,9 +280,13 @@ test('audio has one context, bounded voices/loops, distinct head route, mute and
   assert.equal(audio.getState().headshotConfirmations, 1);
   assert.equal(audio.getState().played.head, 2);
   assert.equal(audio.voices.at(-1).gain.gain.value, 1.04, 'local confirmation must remain bounded');
-  for (let i = 0; i < 100; i++) audio.release();
+  for (let i = 0; i < 100; i++) {
+    audio.release();
+  }
   assert.ok(audio.getState().voices <= BOW_AUDIO_VOICES);
-  for (let i = 0; i < 20; i++) audio.draw(i, 0.8);
+  for (let i = 0; i < 20; i++) {
+    audio.draw(i, 0.8);
+  }
   assert.ok(audio.getState().drawLoops <= 7);
   audio.setMuted(true);
   assert.equal(audio.master.gain.value, 0);
@@ -306,7 +318,9 @@ test('draw softens near completion and a fully held bow stays silent without res
   audio.draw(-1, 0.97);
   assert.equal(audio.getState().drawLoops, 0);
   assert.equal(audio.getState().voices, 0);
-  for (let i = 0; i < 90; i++) audio.draw(-1, 1);
+  for (let i = 0; i < 90; i++) {
+    audio.draw(-1, 1);
+  }
   assert.equal(audio.getState().played.draw, starts, 'holding full draw must not recreate sources');
   assert.equal(audio.getState().drawLoops, 0);
   assert.equal(audio.getState().voices, 0);
@@ -421,7 +435,9 @@ test('late decode cannot overwrite a disposed or resumed audio graph', async () 
   deferDecode = false;
   await audio.resume();
   const context = audio.context;
-  for (const resolve of deferred.splice(0)) resolve();
+  for (const resolve of deferred.splice(0)) {
+    resolve();
+  }
   await pending;
   assert.ok(
     [...audio.buffers]

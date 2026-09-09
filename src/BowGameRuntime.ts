@@ -922,12 +922,13 @@ export class BowGameRuntime {
     };
   }
   private slotSpawn(slot: number) {
-    if (slot === 0)
+    if (slot === 0) {
       return new Vector3(
         this.requiredConfig.playerSpawn.x,
         this.requiredConfig.playerSpawn.y,
         this.requiredConfig.playerSpawn.z,
       );
+    }
     const base = this.requiredConfig.botSpawns[(slot - 1) % this.requiredConfig.botSpawns.length],
       ring = Math.floor((slot - 1) / this.requiredConfig.botSpawns.length);
     const wanted = new Vector3(
@@ -987,7 +988,9 @@ export class BowGameRuntime {
     const wanted = new Set<string>();
 
     for (const slot of snapshot.players) {
-      if (slot.local) continue;
+      if (slot.local) {
+        continue;
+      }
       wanted.add(slot.id);
       const player =
         this.remotePlayers.get(slot.id) ?? this.createRemote(slot.id, slot.name, slot.slot);
@@ -1014,19 +1017,24 @@ export class BowGameRuntime {
       }
     }
 
-    for (const [id, player] of this.remotePlayers)
+    for (const [id, player] of this.remotePlayers) {
       if (!wanted.has(id)) {
         disposeGroup(player.mesh);
         this.remotePlayers.delete(id);
       }
+    }
   }
   private onNetwork(message: ServerMessage | null, snapshot: NetSnapshot) {
     const previousId = this.networkSnapshot?.playerId;
     this.networkSnapshot = snapshot;
     this.syncRemotePlayers(snapshot);
-    if (snapshot.playerId) this.kills = snapshot.scores[snapshot.playerId] ?? 0;
+    if (snapshot.playerId) {
+      this.kills = snapshot.scores[snapshot.playerId] ?? 0;
+    }
     const local = snapshot.players.find((player) => player.local);
-    if (local) this.deaths = local.deaths;
+    if (local) {
+      this.deaths = local.deaths;
+    }
 
     if (message?.type === 'welcome' && snapshot.playerId !== previousId) {
       const own = snapshot.players.find((player) => player.local);
@@ -1074,7 +1082,9 @@ export class BowGameRuntime {
       this.messageUntil = Infinity;
     }
 
-    if (message?.type === 'round_reset') this.resetOnlineRound();
+    if (message?.type === 'round_reset') {
+      this.resetOnlineRound();
+    }
 
     if (message?.type === 'full') {
       this.message = 'Server full';
@@ -1085,7 +1095,9 @@ export class BowGameRuntime {
   }
   private applyNetworkHit(message: Extract<ServerMessage, { type: 'hit' }>) {
     const key = `${message.playerId}:${message.arrowId}`;
-    if (this.hp <= 0 || this.receivedHits.has(key)) return;
+    if (this.hp <= 0 || this.receivedHits.has(key)) {
+      return;
+    }
     this.receivedHits.add(key);
     this.hp = Math.max(0, this.hp - message.damage);
     this.flash = 1;
@@ -1190,7 +1202,9 @@ export class BowGameRuntime {
   }
   private restart() {
     this.preview = null;
-    if (!this.config) return;
+    if (!this.config) {
+      return;
+    }
     const local = this.networkSnapshot?.players.find((player) => player.local);
     this.player.copy(this.session ? this.slotSpawn(local?.slot ?? 0) : this.config.playerSpawn);
     this.hp = 100;
@@ -1337,12 +1351,18 @@ export class BowGameRuntime {
     }
   };
   private enter = () => {
-    if (this.preview) this.restart();
+    if (this.preview) {
+      this.restart();
+    }
 
     if (this.session) {
       const input = this.hud.name as HTMLInputElement | undefined;
-      if (input) this.session.setName(input.value);
-      if (this.networkSnapshot?.status !== 'connected') return;
+      if (input) {
+        this.session.setName(input.value);
+      }
+      if (this.networkSnapshot?.status !== 'connected') {
+        return;
+      }
     }
 
     const canvas = this.viewer.canvas;
@@ -1559,12 +1579,13 @@ export class BowGameRuntime {
       this.updateHud();
       this.lastHudUpdate = time;
       this.sounds?.draw(-1, active && this.hp > 0 && this.drawing ? this.charge : 0);
-      for (let i = 0; i < this.bots.length; i++)
+      for (let i = 0; i < this.bots.length; i++) {
         this.sounds?.draw(
           i,
           active && this.bots[i].hp > 0 ? this.bots[i].draw : 0,
           this.bots[i].mesh.position,
         );
+      }
     }
 
     this.performanceStats?.record(time, frameMs, performance.now() - start, active);
@@ -2147,7 +2168,9 @@ export class BowGameRuntime {
     return sampleReferenceAction(this.charge, -1, this.aimBlend);
   }
   private updateCamera() {
-    if (!this.running) return;
+    if (!this.running) {
+      return;
+    }
     this.trails?.update(this.elapsed, this.viewer.scene.mainCamera.position);
 
     if (this.preview?.view === 'character') {

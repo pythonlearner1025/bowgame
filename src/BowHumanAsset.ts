@@ -184,8 +184,11 @@ export function attachHumanAsset(
 
   for (let i = 0; i < bones.length; i++) {
     const parent = data.bones[i].parent;
-    if (parent < 0) surface.add(bones[i]);
-    else bones[parent].add(bones[i]);
+    if (parent < 0) {
+      surface.add(bones[i]);
+    } else {
+      bones[parent].add(bones[i]);
+    }
   }
 
   const visual = new Group();
@@ -193,7 +196,9 @@ export function attachHumanAsset(
   visual.position.y = -0.04;
   human.root.add(visual);
   const cover = human.root.getObjectByName('Minimal weathered modesty wrap');
-  if (cover) visual.add(cover);
+  if (cover) {
+    visual.add(cover);
+  }
   visual.add(surface);
   visual.updateMatrixWorld(true);
   surface.updateMatrixWorld(true);

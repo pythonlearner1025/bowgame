@@ -15,7 +15,9 @@ const { RoomLogic, ROOM_CAP, SCORE_LIMIT } = await import(source);
 
 test('room caps membership at ten and reuses a departed player slot', () => {
   const room = new RoomLogic();
-  for (let i = 0; i < ROOM_CAP; i++) assert.equal(room.join(`p${i}`, `Archer-${i}`)?.slot, i);
+  for (let i = 0; i < ROOM_CAP; i++) {
+    assert.equal(room.join(`p${i}`, `Archer-${i}`)?.slot, i);
+  }
   assert.equal(room.join('overflow', 'Archer-X'), null);
   assert.equal(room.leave('p4'), true);
   assert.equal(room.players.size, 9);
@@ -41,7 +43,9 @@ test('twenty deaths end a round and further deaths do not score', () => {
   room.join('a', 'A');
   room.join('b', 'B');
   let result;
-  for (let i = 0; i < SCORE_LIMIT; i++) result = room.death('b', 'a');
+  for (let i = 0; i < SCORE_LIMIT; i++) {
+    result = room.death('b', 'a');
+  }
   assert.equal(result.winnerId, 'a');
   assert.equal(room.roundEnded, true);
   assert.equal(room.scores().a, 20);
@@ -53,7 +57,9 @@ test('reset advances the round, clears kills, and permits play again', () => {
   const room = new RoomLogic(7);
   room.join('a', 'A');
   room.join('b', 'B');
-  for (let i = 0; i < SCORE_LIMIT; i++) room.death('b', 'a');
+  for (let i = 0; i < SCORE_LIMIT; i++) {
+    room.death('b', 'a');
+  }
   const reset = room.reset();
   assert.equal(reset.round, 8);
   assert.deepEqual(reset.scores, { a: 0, b: 0 });

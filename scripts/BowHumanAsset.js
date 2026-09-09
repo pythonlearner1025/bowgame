@@ -119,18 +119,21 @@ export function attachHumanAsset(human, index, source = asset) {
     });
     for (let i = 0; i < bones.length; i++) {
         const parent = data.bones[i].parent;
-        if (parent < 0)
+        if (parent < 0) {
             surface.add(bones[i]);
-        else
+        }
+        else {
             bones[parent].add(bones[i]);
+        }
     }
     const visual = new Group();
     visual.name = 'Grounded survivor surface';
     visual.position.y = -0.04;
     human.root.add(visual);
     const cover = human.root.getObjectByName('Minimal weathered modesty wrap');
-    if (cover)
+    if (cover) {
         visual.add(cover);
+    }
     visual.add(surface);
     visual.updateMatrixWorld(true);
     surface.updateMatrixWorld(true);

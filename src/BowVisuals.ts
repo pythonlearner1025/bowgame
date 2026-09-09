@@ -140,7 +140,7 @@ function skinMaterial(tone: number) {
     data = new Uint8Array(size * size * 4);
   let seed = 9127;
 
-  for (let y = 0; y < size; y++)
+  for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       const grain = (seed / 4294967296 - 0.5) * 12;
@@ -152,6 +152,7 @@ function skinMaterial(tone: number) {
       data[j + 2] = 179 + grain + mottling;
       data[j + 3] = 255;
     }
+  }
 
   const map = new DataTexture(data, size, size, RGBAFormat);
   map.colorSpace = SRGBColorSpace;
@@ -446,7 +447,7 @@ export function makeHuman(index = 0): HumanRig {
     );
     oval(shin, skin, 'Bare heel', vector(0, -0.398, 0.015), vector(0.042, 0.052, 0.055));
     oval(shin, skin, 'Bare foot', vector(0, -0.418, -0.069), vector(0.047, 0.041, 0.112));
-    for (let toe = 0; toe < 5; toe++)
+    for (let toe = 0; toe < 5; toe++) {
       oval(
         shin,
         skin,
@@ -454,6 +455,7 @@ export function makeHuman(index = 0): HumanRig {
         vector((toe - 2) * 0.018, -0.419, -0.159 + toe * 0.007),
         vector(0.011 - toe * 0.0007, 0.019, 0.03 - toe * 0.002),
       );
+    }
     legs.push({ root: leg, shin });
   }
 
@@ -573,7 +575,7 @@ function recurveFinish() {
     data = new Uint8Array(size * size * 4);
   let seed = 7823;
 
-  for (let y = 0; y < size; y++)
+  for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       const noise = (seed / 4294967296 - 0.5) * 8,
@@ -584,6 +586,7 @@ function recurveFinish() {
       data[i + 2] = 46 + noise + wear * 0.4;
       data[i + 3] = 255;
     }
+  }
 
   const map = new DataTexture(data, size, size, RGBAFormat);
   map.colorSpace = SRGBColorSpace;
@@ -660,11 +663,12 @@ export function makeFieldBow(): Group {
     geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(65 * 9 * 3), 3));
     const indices: number[] = [];
 
-    for (let j = 1; j <= 64; j++)
+    for (let j = 1; j <= 64; j++) {
       for (let i = 1; i <= 8; i++) {
         const index = j * 9 + i;
         indices.push(index, index - 1, index - 10, index, index - 10, index - 9);
       }
+    }
 
     geometry.setIndex(indices);
     const rail = add(group, geometry, finish, 'Flexible open limb rail');

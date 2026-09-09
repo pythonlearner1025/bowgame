@@ -23,15 +23,17 @@ function bundledProjectAssets(): Plugin {
         for (const entry of await readdir(directory, { withFileTypes: true })) {
           const path = resolve(directory, entry.name);
 
-          if (entry.isDirectory()) await visit(path);
-          else {
+          if (entry.isDirectory()) {
+            await visit(path);
+          } else {
             const assetPath = relative(assetsRoot, path).replaceAll('\\', '/');
-            if (runtimeAssets.has(assetPath))
+            if (runtimeAssets.has(assetPath)) {
               this.emitFile({
                 type: 'asset',
                 fileName: `kite/assets/${assetPath}`,
                 source: await readFile(path),
               });
+            }
           }
         }
       };
@@ -49,7 +51,9 @@ function localOnlyDependencies(): Plugin {
     name: 'local-only-dependencies',
     enforce: 'pre',
     transform(code, id) {
-      if (!id.includes('/threepipe/lib/index.js')) return;
+      if (!id.includes('/threepipe/lib/index.js')) {
+        return;
+      }
 
       return code
         .replaceAll('https://cdn.jsdelivr.net/', '/kite/local-third-party/')

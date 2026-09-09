@@ -14,7 +14,9 @@ let originals = 0;
 for (const [id, entry] of Object.entries(manifest.files)) {
   const bytes = await readFile(resolve(root, entry.path));
   assert.equal(createHash('sha256').update(bytes).digest('hex'), entry.sha256, `${id} hash`);
-  if (id === 'main.scene.glb') continue;
+  if (id === 'main.scene.glb') {
+    continue;
+  }
   const original = await readFile(resolve(originalRoot, id));
   assert.equal(Buffer.compare(bytes, original), 0, `${id} original bytes`);
   originals++;

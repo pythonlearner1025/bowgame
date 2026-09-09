@@ -237,12 +237,13 @@ export function sampleReferenceAction(charge: number, release = -1, aim = 0): Re
     return { ...carry };
   }
   const result = track(load, Math.min(1, charge) * BOW_LOAD_DRAW_SECONDS);
-  if (charge > 0.82)
+  if (charge > 0.82) {
     return blendReferencePoses(
       result,
       { ...aimed, tension: result.tension },
       aim * Math.min(1, (charge - 0.82) / 0.18),
     );
+  }
 
   return result;
 }
@@ -254,12 +255,13 @@ export function sampleReferenceAction(charge: number, release = -1, aim = 0): Re
  * @returns A newly allocated preview pose; no gameplay arrow is fired.
  */
 export function sampleReferenceTimeline(time: number): ReferencePose {
-  if (time < 0.78)
+  if (time < 0.78) {
     return {
       ...carry,
       grip: [0.568 + Math.sin(time * 9) * 0.015, 0.949 + Math.sin(time * 12) * 0.008, 0.65],
     };
-  if (time < 1.34)
+  }
+  if (time < 1.34) {
     return track(
       [
         { timeSeconds: 0.78, pose: carry },
@@ -268,9 +270,14 @@ export function sampleReferenceTimeline(time: number): ReferencePose {
       ],
       time,
     );
-  if (time < 1.96) return { ...carry };
-  if (time < 3.13) return sampleReferenceAction((time - 1.96) / BOW_LOAD_DRAW_SECONDS);
-  if (time < 3.53)
+  }
+  if (time < 1.96) {
+    return { ...carry };
+  }
+  if (time < 3.13) {
+    return sampleReferenceAction((time - 1.96) / BOW_LOAD_DRAW_SECONDS);
+  }
+  if (time < 3.53) {
     return track(
       [
         { timeSeconds: 3.13, pose: ready },
@@ -288,7 +295,8 @@ export function sampleReferenceTimeline(time: number): ReferencePose {
       ],
       time,
     );
-  if (time < 3.97)
+  }
+  if (time < 3.97) {
     return track(
       [
         { timeSeconds: 3.53, pose: aimed },
@@ -297,12 +305,14 @@ export function sampleReferenceTimeline(time: number): ReferencePose {
       ],
       time,
     );
-  if (time < 6.22)
+  }
+  if (time < 6.22) {
     return {
       ...carry,
       grip: [0.565 + Math.sin(time * 8) * 0.015, 0.958 + Math.sin(time * 10) * 0.009, 0.65],
     };
-  if (time < 6.48)
+  }
+  if (time < 6.48) {
     return track(
       [
         { timeSeconds: 6.22, pose: carry },
@@ -311,9 +321,14 @@ export function sampleReferenceTimeline(time: number): ReferencePose {
       ],
       time,
     );
-  if (time < 8.466667) return { ...aimed };
-  if (time < 9.1) return sampleReferenceAction(0, time - 8.466667, 1);
-  if (time < 9.7)
+  }
+  if (time < 8.466667) {
+    return { ...aimed };
+  }
+  if (time < 9.1) {
+    return sampleReferenceAction(0, time - 8.466667, 1);
+  }
+  if (time < 9.7) {
     return track(
       [
         { timeSeconds: 9.1, pose: carry },
@@ -340,6 +355,7 @@ export function sampleReferenceTimeline(time: number): ReferencePose {
       ],
       time,
     );
+  }
 
   return sampleReferenceAction((time - 9.1) / BOW_LOAD_DRAW_SECONDS);
 }

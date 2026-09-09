@@ -89,8 +89,11 @@ export function attachFirstPersonArm(
 
   const keep = (i: number) => {
     let weight = 0;
-    for (let j = 0; j < 4; j++)
-      if (allowed.has(data.skinIndex[i * 4 + j])) weight += data.skinWeight[i * 4 + j];
+    for (let j = 0; j < 4; j++) {
+      if (allowed.has(data.skinIndex[i * 4 + j])) {
+        weight += data.skinWeight[i * 4 + j];
+      }
+    }
 
     return weight > 0.985;
   };
@@ -142,9 +145,11 @@ export function attachFirstPersonArm(
   for (let i = 0; i < positions.length; i += 3) {
     const point = new Vector3(positions[i], positions[i + 1], positions[i + 2]);
     let weight = 0;
-    for (let j = 0; j < 4; j++)
-      if (/^(upperarm|lowerarm)/.test(data.bones[skinIndex[(i / 3) * 4 + j]].name))
+    for (let j = 0; j < 4; j++) {
+      if (/^(upperarm|lowerarm)/.test(data.bones[skinIndex[(i / 3) * 4 + j]].name)) {
         weight += skinWeight[(i / 3) * 4 + j];
+      }
+    }
 
     if (weight > 0.01) {
       const nearest = findNearestSegmentPoint(point, armSegments);
@@ -213,8 +218,11 @@ export function attachFirstPersonArm(
 
   for (let i = 0; i < bones.length; i++) {
     const parent = data.bones[i].parent;
-    if (parent < 0) surface.add(bones[i]);
-    else bones[parent].add(bones[i]);
+    if (parent < 0) {
+      surface.add(bones[i]);
+    } else {
+      bones[parent].add(bones[i]);
+    }
   }
 
   arm.root.traverse((object) => {
@@ -275,8 +283,9 @@ export function attachFirstPersonArm(
       elbow.equals(last.elbow) &&
       grip.equals(last.grip) &&
       roll.equals(last.roll)
-    )
+    ) {
       return;
+    }
     last.shoulder.copy(shoulder);
     last.elbow.copy(elbow);
     last.grip.copy(grip);

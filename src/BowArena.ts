@@ -196,7 +196,9 @@ export function buildBowArena(): {
       radius * (0.8 + random() * 0.3),
     );
     mesh.rotation.y = random() * Math.PI;
-    if (collision) obstacles.push({ x, z, r: radius * 0.95, height });
+    if (collision) {
+      obstacles.push({ x, z, r: radius * 0.95, height });
+    }
   };
 
   [
@@ -332,7 +334,9 @@ export function buildBowArena(): {
       }
     }
 
-    if (collision) obstacles.push({ x, z, r: 0.5, height });
+    if (collision) {
+      obstacles.push({ x, z, r: 0.5, height });
+    }
   };
 
   for (let i = 0; i < 34; i++) {
@@ -392,7 +396,7 @@ export function buildBowArena(): {
 
   const crate = (x: number, z: number, size: number) => {
     add(box, wood, 'Supply crate', x, size / 2, z, size, size, size);
-    for (const offset of [-0.36, 0.36])
+    for (const offset of [-0.36, 0.36]) {
       add(
         box,
         steel,
@@ -404,6 +408,7 @@ export function buildBowArena(): {
         size + 0.03,
         size + 0.04,
       );
+    }
     obstacles.push({ x, z, r: size * 0.68, height: size });
   };
 
@@ -468,7 +473,9 @@ export function buildBowArena(): {
     const x = (random() - 0.5) * 105,
       z = (random() - 0.5) * 105;
     // Worn central crossing and spawn area remain readable.
-    if (Math.abs(x) < 3.7 || Math.abs(z + 2) < 2.2 || Math.hypot(x, z - 17) < 3) continue;
+    if (Math.abs(x) < 3.7 || Math.abs(z + 2) < 2.2 || Math.hypot(x, z - 17) < 3) {
+      continue;
+    }
     matrix.position.set(x, 0, z);
     matrix.rotation.y = random() * Math.PI;
     matrix.scale.setScalar(0.5 + random() * 1.2);
