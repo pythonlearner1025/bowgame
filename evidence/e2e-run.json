@@ -1,0 +1,58 @@
+{
+  "url": "http://127.0.0.1:43173/",
+  "bots": 3,
+  "elapsed": 0.63,
+  "before": [
+    {
+      "x": -14,
+      "y": 0,
+      "z": -17
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": -23
+    },
+    {
+      "x": 20,
+      "y": 0,
+      "z": -6
+    }
+  ],
+  "after": [
+    {
+      "x": -14.495854305729768,
+      "y": 0,
+      "z": -15.765929672369936
+    },
+    {
+      "x": -0.8995781806702873,
+      "y": 0,
+      "z": -22.023811114250847
+    },
+    {
+      "x": 18.674860509060036,
+      "y": 0,
+      "z": -5.88703729909472
+    }
+  ],
+  "scoreText": "00 / 10  ELIMINATIONS",
+  "renderBatch": {
+    "originalMeshes": 91,
+    "batches": 28
+  },
+  "sceneStats": {
+    "objects": 134,
+    "meshes": 133,
+    "instancedMeshes": 4,
+    "instances": {
+      "Detailed pine needle boughs": 6720,
+      "Tapered pine branches": 1680,
+      "Dry forest grasses": 3400,
+      "Forest scree": 160
+    }
+  },
+  "pointerLock": null,
+  "consoleErrors": [],
+  "pageErrors": []
+}
