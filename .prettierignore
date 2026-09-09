@@ -1,0 +1,10 @@
+worker-configuration.d.ts
+scripts/
+dist/
+evidence/
+assets/
+node_modules/
+.wrangler/
+test-results/
+worker-startup.cpuprofile
+package-lock.json

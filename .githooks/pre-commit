@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keep commits readable and deterministic by applying the same gate as continuous integration.
+npm run lint

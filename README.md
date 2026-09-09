@@ -2,6 +2,16 @@
 
 Standalone Kite3D project for the local bow deathmatch. It uses Threepipe 0.5.1 from the clean checkout at `/private/tmp/kite3d/threepipe`; it does not depend on editor internals or a CDN.
 
+## Code style
+
+Read [CODESTYLE.md](CODESTYLE.md) before changing source. Formatting and linting are enforced by
+`npm run lint`; use `npm run format` or `npm run lint:fix` to apply mechanical fixes. Enable the
+committed pre-commit check once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
 ## Play online
 
 The deployed game is **https://bowgame.minjunesv0.workers.dev**. The hosted page joins the one `main` room automatically; edit the generated `Archer-####` name on the **ENTER ARENA** overlay, then enter. Up to 10 friends can play, the first player to 20 kills wins, and the next round starts about five seconds later. Add `?solo=1` to the live URL to force the original three-bot, first-to-10 game.
@@ -44,16 +54,16 @@ Each `samples[]` entry covers about one second and contains:
 
 The `BowRoom` Worker writes JSON-only metadata to Workers Logs and never logs WebSocket payloads. Every line includes `service`, `event`, and `timestamp`.
 
-| `event` | Additional fields |
-|---|---|
-| `hibernation_wake` | `connectedCount` |
-| `join` | `playerId`, `slot`, `connectedCount` |
-| `leave` | `playerId`, `slot`, `code`, `wasClean`, `connectedCount` |
-| `full` | `connectedCount`, `roomCap` |
-| `round_end` | `round`, `winnerId`, `connectedCount` |
-| `round_reset` | `round`, `connectedCount` |
-| `exception` | `handler`, `errorName`, `errorMessage`, `connectedCount` |
-| `summary` | `windowStartedAt`, `windowMs`, `inboundMessagesByType`, `outboundMessagesByType`, `broadcastFanOut`, `maxMessageBytes`, `connectedCount` |
+| `event`            | Additional fields                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `hibernation_wake` | `connectedCount`                                                                                                                         |
+| `join`             | `playerId`, `slot`, `connectedCount`                                                                                                     |
+| `leave`            | `playerId`, `slot`, `code`, `wasClean`, `connectedCount`                                                                                 |
+| `full`             | `connectedCount`, `roomCap`                                                                                                              |
+| `round_end`        | `round`, `winnerId`, `connectedCount`                                                                                                    |
+| `round_reset`      | `round`, `connectedCount`                                                                                                                |
+| `exception`        | `handler`, `errorName`, `errorMessage`, `connectedCount`                                                                                 |
+| `summary`          | `windowStartedAt`, `windowMs`, `inboundMessagesByType`, `outboundMessagesByType`, `broadcastFanOut`, `maxMessageBytes`, `connectedCount` |
 
 The hibernation-friendly 60-second summary is emitted on the first room activity after each minute; an idle room does not stay awake just to log.
 
