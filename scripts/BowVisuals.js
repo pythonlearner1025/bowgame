@@ -1,40 +1,72 @@
-import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, SphereGeometry, CylinderGeometry, TubeGeometry, CatmullRomCurve3, Vector3, Quaternion, Color, DataTexture, RGBAFormat, SRGBColorSpace, RepeatWrapping, Line, LineBasicMaterial } from 'threepipe';
-const V = (x = 0, y = 0, z = 0) => new Vector3(x, y, z);
-const up = V(0, 1, 0);
-const smooth = (v) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
-function add(parent, geometry, material, name, position = V(), scale = V(1, 1, 1)) {
-    const m = new Mesh(geometry, material);
-    m.name = name;
-    m.position.copy(position);
-    m.scale.copy(scale);
-    m.castShadow = m.receiveShadow = true;
-    parent.add(m);
-    return m;
+/**
+ * Creates and poses the procedural bow, fallback body, and first-person limb geometry.
+ * It does not load the bundled human asset, integrate gameplay, or own scene lifecycle.
+ */
+/*
+ * Cross-sections, colors, and pose coordinates are authored visual data calibrated to the
+ * supplied reference clip. They remain inline so each shape can be reviewed as a coherent model.
+ */
+/* eslint-disable no-magic-numbers */
+/* eslint-disable max-params -- Existing public pose helpers and geometric primitives are stable. */
+import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, SphereGeometry, TubeGeometry, CatmullRomCurve3, Vector3, Quaternion, Color, DataTexture, RGBAFormat, SRGBColorSpace, RepeatWrapping, Line, LineBasicMaterial, } from 'threepipe';
+const vector = (x = 0, y = 0, z = 0) => new Vector3(x, y, z);
+const UP_AXIS = vector(0, 1, 0);
+const smooth = (value) => {
+    const fraction = Math.max(0, Math.min(1, value));
+    return fraction * fraction * (3 - 2 * fraction);
+};
+function add(parent, geometry, material, name, position = vector(), scale = vector(1, 1, 1)) {
+    const mesh = new Mesh(geometry, material);
+    mesh.name = name;
+    mesh.position.copy(position);
+    mesh.scale.copy(scale);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
 }
-function oval(parent, material, name, p, s) { return add(parent, new SphereGeometry(1, 24, 18), material, name, p, s); }
-/** Elliptical anatomical cross-sections; continuous normals avoid cylinder/sphere joint silhouettes. */
+function oval(parent, material, name, position, scale) {
+    return add(parent, new SphereGeometry(1, 24, 18), material, name, position, scale);
+}
+/**
+ * Builds continuous elliptical cross-sections without cylinder/sphere joint silhouettes.
+ *
+ * @param sections - Height, X radius, Z radius, and optional Z offset for each section.
+ * @param segments - Radial segment count around each section.
+ * @param sculpt - Optional point transform for additional anatomical shaping.
+ * @returns A new indexed geometry with continuous vertex normals.
+ */
 function loft(sections, segments = 32, sculpt) {
-    const vertices = [], uv = [], indices = [];
-    for (let j = 0; j < sections.length; j++)
+    const vertices = [];
+    const textureCoordinates = [];
+    const indices = [];
+    for (let j = 0; j < sections.length; j++) {
         for (let i = 0; i <= segments; i++) {
-            const [y, rx, rz, offset = 0] = sections[j], a = i / segments * Math.PI * 2;
-            const v = sculpt?.(Math.sin(a) * rx, y, Math.cos(a) * rz + offset, a) ?? V(Math.sin(a) * rx, y, Math.cos(a) * rz + offset);
-            vertices.push(v.x, v.y, v.z);
-            uv.push(i / segments, j / (sections.length - 1));
-            if (j && i) {
-                const n = j * (segments + 1) + i;
-                if (sections[0][0] < sections[sections.length - 1][0])
-                    indices.push(n, n - 1, n - segments - 2, n, n - segments - 2, n - segments - 1);
-                else
-                    indices.push(n, n - segments - 2, n - 1, n, n - segments - 1, n - segments - 2);
+            const [y, radiusX, radiusZ, offset = 0] = sections[j];
+            const angle = (i / segments) * Math.PI * 2;
+            const point = sculpt?.(Math.sin(angle) * radiusX, y, Math.cos(angle) * radiusZ + offset, angle) ??
+                vector(Math.sin(angle) * radiusX, y, Math.cos(angle) * radiusZ + offset);
+            vertices.push(point.x, point.y, point.z);
+            textureCoordinates.push(i / segments, j / (sections.length - 1));
+            if (j === 0 || i === 0) {
+                continue;
+            }
+            const index = j * (segments + 1) + i;
+            const isAscending = sections[0][0] < sections[sections.length - 1][0];
+            if (isAscending) {
+                indices.push(index, index - 1, index - segments - 2, index, index - segments - 2, index - segments - 1);
+            }
+            else {
+                indices.push(index, index - segments - 2, index - 1, index, index - segments - 1, index - segments - 2);
             }
         }
-    const g = new BufferGeometry();
-    g.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-    g.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-    g.setIndex(indices);
-    g.computeVertexNormals();
-    return g;
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new Float32BufferAttribute(textureCoordinates, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
 }
 function skinMaterial(tone) {
     const size = 256, data = new Uint8Array(size * size * 4);
@@ -42,8 +74,8 @@ function skinMaterial(tone) {
     for (let y = 0; y < size; y++)
         for (let x = 0; x < size; x++) {
             seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-            const grain = (seed / 4294967296 - .5) * 12;
-            const mottling = 4 * Math.sin(x * .11) * Math.sin(y * .08) + 3 * Math.sin(x * .37 + y * .21);
+            const grain = (seed / 4294967296 - 0.5) * 12;
+            const mottling = 4 * Math.sin(x * 0.11) * Math.sin(y * 0.08) + 3 * Math.sin(x * 0.37 + y * 0.21);
             const j = (y * size + x) * 4;
             data[j] = 218 + grain + mottling;
             data[j + 1] = 198 + grain + mottling;
@@ -52,41 +84,77 @@ function skinMaterial(tone) {
         }
     const map = new DataTexture(data, size, size, RGBAFormat);
     map.colorSpace = SRGBColorSpace;
-    map.wrapS = map.wrapT = RepeatWrapping;
+    map.wrapS = RepeatWrapping;
+    map.wrapT = RepeatWrapping;
     map.needsUpdate = true;
-    const m = new MeshStandardMaterial({ color: tone, map, roughness: .82, metalness: 0 });
-    m.bumpMap = map;
-    m.bumpScale = .0013;
-    return m;
+    const material = new MeshStandardMaterial({ color: tone, map, roughness: 0.82, metalness: 0 });
+    material.bumpMap = map;
+    material.bumpScale = 0.0013;
+    return material;
 }
-function span(m, a, b) { m.position.copy(a); m.quaternion.setFromUnitVectors(up, b.clone().sub(a).normalize()); m.scale.y = a.distanceTo(b); }
+function span(mesh, start, end) {
+    mesh.position.copy(start);
+    mesh.quaternion.setFromUnitVectors(UP_AXIS, end.clone().sub(start).normalize());
+    mesh.scale.y = start.distanceTo(end);
+}
+/**
+ * Creates one fallback articulated arm and hand.
+ *
+ * @param skin - Shared procedural skin material.
+ * @param side - Negative for the left arm or positive for the right arm.
+ * @returns A new arm rig ready for inverse-kinematics posing.
+ */
 export function makeArm(skin, side) {
     const root = new Group();
     root.name = side < 0 ? 'Left articulated arm' : 'Right articulated arm';
-    const upper = add(root, loft([[0, .063, .059], [.12, .081, .076], [.35, .084, .081], [.7, .067, .064], [1, .046, .046]]), skin, 'Deltoid to elbow');
-    const lower = add(root, loft([[0, .049, .05], [.2, .064, .057], [.46, .06, .052], [.75, .046, .037], [1, .032, .029]]), skin, 'Tapered forearm');
-    upper.scale.x = upper.scale.z = .85;
-    lower.scale.x = lower.scale.z = .83;
-    const elbow = oval(root, skin, 'Elbow', V(), V(.045, .052, .047));
-    const shoulder = oval(root, skin, 'Rounded deltoid', V(), V(.082, .088, .078));
+    const upper = add(root, loft([
+        [0, 0.063, 0.059],
+        [0.12, 0.081, 0.076],
+        [0.35, 0.084, 0.081],
+        [0.7, 0.067, 0.064],
+        [1, 0.046, 0.046],
+    ]), skin, 'Deltoid to elbow');
+    const lower = add(root, loft([
+        [0, 0.049, 0.05],
+        [0.2, 0.064, 0.057],
+        [0.46, 0.06, 0.052],
+        [0.75, 0.046, 0.037],
+        [1, 0.032, 0.029],
+    ]), skin, 'Tapered forearm');
+    upper.scale.x = 0.85;
+    upper.scale.z = 0.85;
+    lower.scale.x = 0.83;
+    lower.scale.z = 0.83;
+    const elbow = oval(root, skin, 'Elbow', vector(), vector(0.045, 0.052, 0.047));
+    const shoulder = oval(root, skin, 'Rounded deltoid', vector(), vector(0.082, 0.088, 0.078));
     const hand = new Group();
     hand.name = 'Articulated hand';
     root.add(hand);
-    oval(hand, skin, 'Palm', V(.009 * side, 0, .018), V(.043, .053, .024));
+    oval(hand, skin, 'Palm', vector(0.009 * side, 0, 0.018), vector(0.043, 0.053, 0.024));
     // Fingers curl over the grip. Individual phalanges and subtle nails remain readable close up.
-    const nails = new MeshStandardMaterial({ color: 0xbba18c, roughness: .69 });
+    const nails = new MeshStandardMaterial({ color: 0xbba18c, roughness: 0.69 });
     for (let i = 0; i < 4; i++) {
-        const y = .038 - i * .025;
-        const knuckle = oval(hand, skin, 'Finger proximal joint', V(-.029 * side, y, -.008), V(.018, .013, .02));
-        knuckle.rotation.y = side * .25;
-        oval(hand, skin, 'Curled middle phalanx', V(-.033 * side, y, -.031), V(.013, .012, .017));
-        oval(hand, skin, 'Finger tip', V(-.017 * side, y, -.043), V(.02, .011, .011));
-        oval(hand, nails, 'Fingernail', V(-.006 * side, y, -.05), V(.009, .007, .0018));
+        const y = 0.038 - i * 0.025;
+        const knuckle = oval(hand, skin, 'Finger proximal joint', vector(-0.029 * side, y, -0.008), vector(0.018, 0.013, 0.02));
+        knuckle.rotation.y = side * 0.25;
+        oval(hand, skin, 'Curled middle phalanx', vector(-0.033 * side, y, -0.031), vector(0.013, 0.012, 0.017));
+        oval(hand, skin, 'Finger tip', vector(-0.017 * side, y, -0.043), vector(0.02, 0.011, 0.011));
+        oval(hand, nails, 'Fingernail', vector(-0.006 * side, y, -0.05), vector(0.009, 0.007, 0.0018));
     }
-    const thumb = oval(hand, skin, 'Opposed thumb', V(.019 * side, .043, -.014), V(.023, .017, .038));
-    thumb.rotation.y = side * .65;
+    const thumb = oval(hand, skin, 'Opposed thumb', vector(0.019 * side, 0.043, -0.014), vector(0.023, 0.017, 0.038));
+    thumb.rotation.y = side * 0.65;
     return { root, upper, lower, elbow, hand, shoulder };
 }
+/**
+ * Positions one arm from shoulder through elbow to wrist.
+ *
+ * @param arm - Mutable articulated arm rig.
+ * @param shoulder - Shoulder position in the rig's local meters.
+ * @param elbow - Elbow position in the rig's local meters.
+ * @param wrist - Wrist position in the rig's local meters.
+ * @param handRotation - Wrist orientation in the rig's local coordinates.
+ * @returns Nothing; the supplied rig is mutated in place.
+ */
 export function poseArm(arm, shoulder, elbow, wrist, handRotation = new Quaternion()) {
     span(arm.upper, shoulder, elbow);
     span(arm.lower, elbow, wrist);
@@ -96,95 +164,173 @@ export function poseArm(arm, shoulder, elbow, wrist, handRotation = new Quaterni
     arm.hand.quaternion.copy(handRotation);
     arm.applyPose?.(shoulder, elbow, wrist, handRotation);
 }
-/** Original adult anatomy, using pre-October-2017 references; no extracted game assets. */
+/**
+ * Creates the original procedural adult fallback anatomy without extracted game assets.
+ *
+ * @param index - Stable character index used to select the skin-tone palette.
+ * @returns A new poseable human rig.
+ */
 export function makeHuman(index = 0) {
     const root = new Group();
     root.name = 'Adult male survivor';
     const skin = skinMaterial([0xb88a6d, 0x92664f, 0xc19a7d, 0xa57458, 0xb38c6d, 0x9e755c][index % 6]);
-    const sections = [[.83, .085, .08], [.9, .162, .119], [.99, .168, .125], [1.07, .139, .105], [1.16, .141, .104], [1.25, .17, .119], [1.34, .206, .128], [1.41, .214, .117], [1.47, .196, .096], [1.51, .13, .079], [1.55, .072, .07]];
-    const torso = loft(sections, 48, (x, y, z, a) => {
-        const front = Math.max(0, -Math.cos(a));
+    const sections = [
+        [0.83, 0.085, 0.08],
+        [0.9, 0.162, 0.119],
+        [0.99, 0.168, 0.125],
+        [1.07, 0.139, 0.105],
+        [1.16, 0.141, 0.104],
+        [1.25, 0.17, 0.119],
+        [1.34, 0.206, 0.128],
+        [1.41, 0.214, 0.117],
+        [1.47, 0.196, 0.096],
+        [1.51, 0.13, 0.079],
+        [1.55, 0.072, 0.07],
+    ];
+    const torso = loft(sections, 48, (x, y, z, angle) => {
+        const front = Math.max(0, -Math.cos(angle));
         // Pectorals flow into sternum, obliques taper to a restrained waist, with soft abdominal planes.
-        const chest = Math.exp(-Math.pow((y - 1.355) / .09, 2)) * .033 * Math.exp(-Math.pow((Math.abs(x) - .105) / .095, 2));
-        const abs = Math.exp(-Math.pow((y - 1.18) / .15, 2)) * .009 * (.5 + .5 * Math.cos((y - 1.12) * 52)) * Math.exp(-Math.pow((Math.abs(x) - .046) / .038, 2));
-        return V(x, y, z - front * (chest + abs));
+        const chest = Math.exp(-Math.pow((y - 1.355) / 0.09, 2)) *
+            0.033 *
+            Math.exp(-Math.pow((Math.abs(x) - 0.105) / 0.095, 2));
+        const abs = Math.exp(-Math.pow((y - 1.18) / 0.15, 2)) *
+            0.009 *
+            (0.5 + 0.5 * Math.cos((y - 1.12) * 52)) *
+            Math.exp(-Math.pow((Math.abs(x) - 0.046) / 0.038, 2));
+        return vector(x, y, z - front * (chest + abs));
     });
     add(root, torso, skin, 'Continuous sculpted torso');
-    add(root, loft([[1.49, .072, .067], [1.54, .063, .061], [1.6, .057, .057], [1.65, .065, .063]], 32), skin, 'Neck and trapezius');
+    add(root, loft([
+        [1.49, 0.072, 0.067],
+        [1.54, 0.063, 0.061],
+        [1.6, 0.057, 0.057],
+        [1.65, 0.065, 0.063],
+    ], 32), skin, 'Neck and trapezius');
     for (const side of [-1, 1]) {
-        const collar = oval(root, skin, 'Clavicle', V(side * .104, 1.476, -.071), V(.105, .019, .024));
-        collar.rotation.z = side * .12;
-        const nippleMat = new MeshStandardMaterial({ color: new Color(skin.color).multiplyScalar(.68), roughness: .94 });
-        oval(root, nippleMat, 'Subtle chest detail', V(side * .104, 1.34, -.146), V(.007, .006, .0018));
+        const collar = oval(root, skin, 'Clavicle', vector(side * 0.104, 1.476, -0.071), vector(0.105, 0.019, 0.024));
+        collar.rotation.z = side * 0.12;
+        const nippleMat = new MeshStandardMaterial({
+            color: new Color(skin.color).multiplyScalar(0.68),
+            roughness: 0.94,
+        });
+        oval(root, nippleMat, 'Subtle chest detail', vector(side * 0.104, 1.34, -0.146), vector(0.007, 0.006, 0.0018));
     }
-    const navelMat = new MeshStandardMaterial({ color: new Color(skin.color).multiplyScalar(.60), roughness: 1 });
-    oval(root, navelMat, 'Navel', V(0, 1.104, -.104), V(.007, .009, .002));
+    const navelMat = new MeshStandardMaterial({
+        color: new Color(skin.color).multiplyScalar(0.6),
+        roughness: 1,
+    });
+    oval(root, navelMat, 'Navel', vector(0, 1.104, -0.104), vector(0.007, 0.009, 0.002));
     // Smooth non-explicit lower-body coverage; body remains bare above/below the narrow waist wrap.
     const wrap = new MeshStandardMaterial({ color: 0x57463b, roughness: 1 });
-    add(root, loft([[.858, .16, .124], [.882, .17, .132], [.96, .174, .135], [.994, .163, .128]], 40), wrap, 'Minimal weathered modesty wrap');
+    add(root, loft([
+        [0.858, 0.16, 0.124],
+        [0.882, 0.17, 0.132],
+        [0.96, 0.174, 0.135],
+        [0.994, 0.163, 0.128],
+    ], 40), wrap, 'Minimal weathered modesty wrap');
     const legs = [];
     for (const side of [-1, 1]) {
         const leg = new Group();
         leg.name = side < 0 ? 'Left hip joint' : 'Right hip joint';
-        leg.position.set(side * .092, .91, 0);
+        leg.position.set(side * 0.092, 0.91, 0);
         root.add(leg);
-        const thigh = add(leg, loft([[0, .089, .102], [-.09, .096, .108], [-.23, .082, .09], [-.36, .059, .062], [-.44, .051, .054]], 32), skin, 'Thigh anatomy');
-        thigh.rotation.z = side * -.035;
+        const thigh = add(leg, loft([
+            [0, 0.089, 0.102],
+            [-0.09, 0.096, 0.108],
+            [-0.23, 0.082, 0.09],
+            [-0.36, 0.059, 0.062],
+            [-0.44, 0.051, 0.054],
+        ], 32), skin, 'Thigh anatomy');
+        thigh.rotation.z = side * -0.035;
         const shin = new Group();
-        shin.position.set(side * .015, -.43, 0);
+        shin.position.set(side * 0.015, -0.43, 0);
         leg.add(shin);
-        oval(shin, skin, 'Kneecap', V(0, 0, -.017), V(.054, .059, .054));
-        add(shin, loft([[0, .051, .052], [-.09, .065, .074, .016], [-.19, .059, .069, .014], [-.3, .038, .041], [-.39, .033, .036]], 32), skin, 'Calf and ankle');
-        oval(shin, skin, 'Bare heel', V(0, -.398, .015), V(.042, .052, .055));
-        oval(shin, skin, 'Bare foot', V(0, -.418, -.069), V(.047, .041, .112));
+        oval(shin, skin, 'Kneecap', vector(0, 0, -0.017), vector(0.054, 0.059, 0.054));
+        add(shin, loft([
+            [0, 0.051, 0.052],
+            [-0.09, 0.065, 0.074, 0.016],
+            [-0.19, 0.059, 0.069, 0.014],
+            [-0.3, 0.038, 0.041],
+            [-0.39, 0.033, 0.036],
+        ], 32), skin, 'Calf and ankle');
+        oval(shin, skin, 'Bare heel', vector(0, -0.398, 0.015), vector(0.042, 0.052, 0.055));
+        oval(shin, skin, 'Bare foot', vector(0, -0.418, -0.069), vector(0.047, 0.041, 0.112));
         for (let toe = 0; toe < 5; toe++)
-            oval(shin, skin, 'Toe', V((toe - 2) * .018, -.419, -.159 + toe * .007), V(.011 - toe * .0007, .019, .03 - toe * .002));
+            oval(shin, skin, 'Toe', vector((toe - 2) * 0.018, -0.419, -0.159 + toe * 0.007), vector(0.011 - toe * 0.0007, 0.019, 0.03 - toe * 0.002));
         legs.push({ root: leg, shin });
     }
     // Head silhouette: bald adult cranium, narrow temples, defined cheek and jaw rather than a sphere.
-    const head = loft([[1.565, .035, .035, -.014], [1.59, .059, .057, -.013], [1.63, .075, .064, -.006], [1.67, .082, .071], [1.72, .081, .074, .004], [1.77, .08, .079, .01], [1.82, .061, .069, .014], [1.85, .03, .038, .016], [1.856, .002, .003, .016]], 48);
+    const head = loft([
+        [1.565, 0.035, 0.035, -0.014],
+        [1.59, 0.059, 0.057, -0.013],
+        [1.63, 0.075, 0.064, -0.006],
+        [1.67, 0.082, 0.071],
+        [1.72, 0.081, 0.074, 0.004],
+        [1.77, 0.08, 0.079, 0.01],
+        [1.82, 0.061, 0.069, 0.014],
+        [1.85, 0.03, 0.038, 0.016],
+        [1.856, 0.002, 0.003, 0.016],
+    ], 48);
     add(root, head, skin, 'Bald adult head');
-    const socket = new MeshStandardMaterial({ color: new Color(skin.color).multiplyScalar(.61), roughness: .97 });
-    const eyeWhite = new MeshStandardMaterial({ color: 0x93938b, roughness: .5 });
-    const iris = new MeshStandardMaterial({ color: 0x373a2d, roughness: .53 });
-    const lip = new MeshStandardMaterial({ color: new Color(skin.color).multiplyScalar(.71), roughness: .91 });
+    const socket = new MeshStandardMaterial({
+        color: new Color(skin.color).multiplyScalar(0.61),
+        roughness: 0.97,
+    });
+    const eyeWhite = new MeshStandardMaterial({ color: 0x93938b, roughness: 0.5 });
+    const iris = new MeshStandardMaterial({ color: 0x373a2d, roughness: 0.53 });
+    const lip = new MeshStandardMaterial({
+        color: new Color(skin.color).multiplyScalar(0.71),
+        roughness: 0.91,
+    });
     for (const side of [-1, 1]) {
-        oval(root, skin, 'Ear', V(side * .082, 1.692, .003), V(.015, .033, .021));
-        oval(root, socket, 'Ear concha', V(side * .092, 1.691, -.009), V(.005, .018, .008));
-        oval(root, socket, 'Eye socket', V(side * .032, 1.712, -.064), V(.025, .014, .008));
-        oval(root, eyeWhite, 'Eye', V(side * .032, 1.712, -.071), V(.018, .007, .006));
-        oval(root, iris, 'Iris', V(side * .031, 1.712, -.077), V(.006, .006, .0016));
-        const brow = oval(root, skin, 'Brow ridge', V(side * .03, 1.73, -.064), V(.031, .012, .014));
-        brow.rotation.z = side * -.13;
-        oval(root, skin, 'Cheek plane', V(side * .045, 1.685, -.058), V(.03, .025, .015));
-        oval(root, socket, 'Nostril', V(side * .01, 1.673, -.087), V(.005, .003, .003));
+        oval(root, skin, 'Ear', vector(side * 0.082, 1.692, 0.003), vector(0.015, 0.033, 0.021));
+        oval(root, socket, 'Ear concha', vector(side * 0.092, 1.691, -0.009), vector(0.005, 0.018, 0.008));
+        oval(root, socket, 'Eye socket', vector(side * 0.032, 1.712, -0.064), vector(0.025, 0.014, 0.008));
+        oval(root, eyeWhite, 'Eye', vector(side * 0.032, 1.712, -0.071), vector(0.018, 0.007, 0.006));
+        oval(root, iris, 'Iris', vector(side * 0.031, 1.712, -0.077), vector(0.006, 0.006, 0.0016));
+        const brow = oval(root, skin, 'Brow ridge', vector(side * 0.03, 1.73, -0.064), vector(0.031, 0.012, 0.014));
+        brow.rotation.z = side * -0.13;
+        oval(root, skin, 'Cheek plane', vector(side * 0.045, 1.685, -0.058), vector(0.03, 0.025, 0.015));
+        oval(root, socket, 'Nostril', vector(side * 0.01, 1.673, -0.087), vector(0.005, 0.003, 0.003));
     }
-    oval(root, skin, 'Nose bridge', V(0, 1.7, -.074), V(.01, .027, .018));
-    oval(root, skin, 'Nose tip', V(0, 1.679, -.09), V(.016, .012, .013));
-    oval(root, skin, 'Muzzle plane', V(0, 1.653, -.062), V(.028, .024, .011));
-    oval(root, lip, 'Upper lip', V(0, 1.653, -.074), V(.024, .004, .003));
-    oval(root, skin, 'Lower lip', V(0, 1.646, -.074), V(.022, .005, .005));
-    oval(root, skin, 'Chin', V(0, 1.611, -.057), V(.039, .023, .017));
-    const left = makeArm(skin, -1), right = makeArm(skin, 1);
+    oval(root, skin, 'Nose bridge', vector(0, 1.7, -0.074), vector(0.01, 0.027, 0.018));
+    oval(root, skin, 'Nose tip', vector(0, 1.679, -0.09), vector(0.016, 0.012, 0.013));
+    oval(root, skin, 'Muzzle plane', vector(0, 1.653, -0.062), vector(0.028, 0.024, 0.011));
+    oval(root, lip, 'Upper lip', vector(0, 1.653, -0.074), vector(0.024, 0.004, 0.003));
+    oval(root, skin, 'Lower lip', vector(0, 1.646, -0.074), vector(0.022, 0.005, 0.005));
+    oval(root, skin, 'Chin', vector(0, 1.611, -0.057), vector(0.039, 0.023, 0.017));
+    const left = makeArm(skin, -1);
+    const right = makeArm(skin, 1);
     root.add(left.root, right.root);
     const human = { root, left, right, legs, skin };
     poseHuman(human, 0, 0, true);
     return human;
 }
-export function poseHuman(h, draw, walk, relaxed = false) {
-    const d = smooth(draw), l = V(-.245, 1.44, 0), r = V(.245, 1.44, 0);
-    if (relaxed) {
-        poseArm(h.left, l, V(-.28, 1.16, .013), V(-.27, .93, -.012));
-        poseArm(h.right, r, V(.29, 1.15, .018), V(.28, .925, -.017));
+/**
+ * Applies draw and walk values to a full-body fallback rig.
+ *
+ * @param human - Mutable procedural human rig.
+ * @param draw - Normalized bow draw amount from zero to one.
+ * @param walk - Signed walk-cycle value in radians.
+ * @param isRelaxed - Whether arms hang in their non-combat pose.
+ * @returns Nothing; the supplied rig is mutated in place.
+ */
+export function poseHuman(human, draw, walk, isRelaxed = false) {
+    const smoothDraw = smooth(draw);
+    const leftShoulder = vector(-0.245, 1.44, 0);
+    const rightShoulder = vector(0.245, 1.44, 0);
+    if (isRelaxed) {
+        poseArm(human.left, leftShoulder, vector(-0.28, 1.16, 0.013), vector(-0.27, 0.93, -0.012));
+        poseArm(human.right, rightShoulder, vector(0.29, 1.15, 0.018), vector(0.28, 0.925, -0.017));
     }
     else {
-        poseArm(h.left, l, V(-.3, 1.34, -.31), V(-.24, 1.38, -.59));
-        poseArm(h.right, r, V(.33 + d * .13, 1.21 + d * .23, -.12 + d * .11), V(-.24, 1.38, -.49 + d * .39));
+        poseArm(human.left, leftShoulder, vector(-0.3, 1.34, -0.31), vector(-0.24, 1.38, -0.59));
+        poseArm(human.right, rightShoulder, vector(0.33 + smoothDraw * 0.13, 1.21 + smoothDraw * 0.23, -0.12 + smoothDraw * 0.11), vector(-0.24, 1.38, -0.49 + smoothDraw * 0.39));
     }
-    h.legs[0].root.rotation.x = walk * .43;
-    h.legs[1].root.rotation.x = -walk * .43;
-    h.legs[0].shin.rotation.x = Math.max(0, -walk) * .55;
-    h.legs[1].shin.rotation.x = Math.max(0, walk) * .55;
+    human.legs[0].root.rotation.x = walk * 0.43;
+    human.legs[1].root.rotation.x = -walk * 0.43;
+    human.legs[0].shin.rotation.x = Math.max(0, -walk) * 0.55;
+    human.legs[1].shin.rotation.x = Math.max(0, walk) * 0.55;
 }
 function recurveFinish() {
     const size = 128, data = new Uint8Array(size * size * 4);
@@ -192,35 +338,60 @@ function recurveFinish() {
     for (let y = 0; y < size; y++)
         for (let x = 0; x < size; x++) {
             seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-            const noise = (seed / 4294967296 - .5) * 8, wear = Math.pow(Math.max(0, Math.sin(x * .41 + y * .15)), 22) * 48;
+            const noise = (seed / 4294967296 - 0.5) * 8, wear = Math.pow(Math.max(0, Math.sin(x * 0.41 + y * 0.15)), 22) * 48;
             const i = (y * size + x) * 4;
             data[i] = 110 + noise + wear;
-            data[i + 1] = 75 + noise + wear * .65;
-            data[i + 2] = 46 + noise + wear * .4;
+            data[i + 1] = 75 + noise + wear * 0.65;
+            data[i + 2] = 46 + noise + wear * 0.4;
             data[i + 3] = 255;
         }
     const map = new DataTexture(data, size, size, RGBAFormat);
     map.colorSpace = SRGBColorSpace;
-    map.wrapS = map.wrapT = RepeatWrapping;
+    map.wrapS = RepeatWrapping;
+    map.wrapT = RepeatWrapping;
     map.needsUpdate = true;
-    return new MeshStandardMaterial({ color: 0xc1a17c, map, roughness: .9, metalness: 0 });
+    return new MeshStandardMaterial({ color: 0xc1a17c, map, roughness: 0.9, metalness: 0 });
 }
-/** Original dark recurve recreation from the supplied clip: angular riser and open twin limbs. */
+/**
+ * Creates the original dark recurve recreation with angular riser and open twin limbs.
+ *
+ * @returns A new bow group with mutable rail and string references in `userData`.
+ */
 export function makeFieldBow() {
     const group = new Group();
     group.name = 'Dark open-limb recurve bow';
-    const finish = recurveFinish(), grip = new MeshStandardMaterial({ color: 0x27262b, roughness: .85 });
-    const riser = loft([[-.43, .038, .027], [-.35, .055, .031], [-.25, .061, .033], [-.19, .035, .029], [-.08, .025, .028], [0, .024, .027], [.1, .025, .026], [.22, .033, .029], [.28, .058, .034], [.40, .046, .027], [.44, .036, .025]], 12);
+    const finish = recurveFinish(), grip = new MeshStandardMaterial({ color: 0x27262b, roughness: 0.85 });
+    const riser = loft([
+        [-0.43, 0.038, 0.027],
+        [-0.35, 0.055, 0.031],
+        [-0.25, 0.061, 0.033],
+        [-0.19, 0.035, 0.029],
+        [-0.08, 0.025, 0.028],
+        [0, 0.024, 0.027],
+        [0.1, 0.025, 0.026],
+        [0.22, 0.033, 0.029],
+        [0.28, 0.058, 0.034],
+        [0.4, 0.046, 0.027],
+        [0.44, 0.036, 0.025],
+    ], 12);
     const body = add(group, riser, finish, 'Sculpted recurve riser');
-    body.scale.set(.67, .72, .62);
-    add(group, loft([[-.08, .027, .030], [-.06, .028, .031], [.075, .027, .031], [.09, .025, .029]], 20), grip, 'Contoured hand grip');
-    const cord = new MeshStandardMaterial({ color: 0xbca382, roughness: .97 });
+    body.scale.set(0.67, 0.72, 0.62);
+    add(group, loft([
+        [-0.08, 0.027, 0.03],
+        [-0.06, 0.028, 0.031],
+        [0.075, 0.027, 0.031],
+        [0.09, 0.025, 0.029],
+    ], 20), grip, 'Contoured hand grip');
+    const cord = new MeshStandardMaterial({ color: 0xbca382, roughness: 0.97 });
     const coils = [];
     for (let i = 0; i <= 480; i++) {
-        const t = i / 480, y = .185 + t * .115, angle = t * Math.PI * 2 * 18, radius = .036 + Math.sin(t * Math.PI) * .004;
-        coils.push(V(Math.cos(angle) * radius, y, Math.sin(angle) * .025));
+        const fraction = i / 480;
+        const y = 0.185 + fraction * 0.115;
+        const angle = fraction * Math.PI * 2 * 18;
+        const radius = 0.036 + Math.sin(fraction * Math.PI) * 0.004;
+        coils.push(vector(Math.cos(angle) * radius, y, Math.sin(angle) * 0.025));
     }
-    add(group, new TubeGeometry(new CatmullRomCurve3(coils), 480, .0028, 6, false), cord, 'Tan braided rope riser binding');
+    add(group, new TubeGeometry(new CatmullRomCurve3(coils), 480, 0.0028, 6, false), cord, 'Tan braided rope riser binding');
     const rails = [];
     for (const side of [-1, 1]) {
         const geometry = new BufferGeometry();
@@ -228,15 +399,15 @@ export function makeFieldBow() {
         const indices = [];
         for (let j = 1; j <= 64; j++)
             for (let i = 1; i <= 8; i++) {
-                const n = j * 9 + i;
-                indices.push(n, n - 1, n - 10, n, n - 10, n - 9);
+                const index = j * 9 + i;
+                indices.push(index, index - 1, index - 10, index, index - 10, index - 9);
             }
         geometry.setIndex(indices);
         const rail = add(group, geometry, finish, 'Flexible open limb rail');
         rail.userData.railSide = side;
         rails.push(rail);
     }
-    const string = new Line(new BufferGeometry().setFromPoints([V(), V(), V()]), new LineBasicMaterial({ color: 0x6d6574 }));
+    const string = new Line(new BufferGeometry().setFromPoints([vector(), vector(), vector()]), new LineBasicMaterial({ color: 0x6d6574 }));
     string.name = 'Bowstring anchored to tips and nock';
     group.add(string);
     group.userData.bowLimb = rails[0];
@@ -245,61 +416,128 @@ export function makeFieldBow() {
     deformBow(group, 0);
     return group;
 }
-export function bowNock(draw) { return V(0, .115, .145 + .68 * draw); }
-/** Updates the existing rail buffers; arrow and string retain one shared nock throughout the clip. */
+/**
+ * Computes the shared bowstring and arrow nock position.
+ *
+ * @param draw - Normalized bow draw from zero to one.
+ * @returns Nock position in bow-local meters.
+ */
+export function bowNock(draw) {
+    return vector(0, 0.115, 0.145 + 0.68 * draw);
+}
+/**
+ * Updates rail buffers while arrow and string retain one shared nock.
+ *
+ * @param group - Bow group created by `makeFieldBow`.
+ * @param draw - Normalized bow draw from zero to one.
+ * @param vibration - Small bow-local Z displacement in meters after release.
+ * @returns Nothing; mutable geometry attributes are updated in place.
+ */
 export function deformBow(group, draw, vibration = 0) {
     const rails = group.userData.bowRails;
-    if (!rails)
+    if (!rails) {
         return;
-    if (group.userData.lastVisualDraw === draw && group.userData.lastVisualVibration === vibration)
+    }
+    if (group.userData.lastVisualDraw === draw && group.userData.lastVisualVibration === vibration) {
         return;
+    }
     group.userData.lastVisualDraw = draw;
     group.userData.lastVisualVibration = vibration;
     for (const rail of rails) {
-        const p = rail.geometry.getAttribute('position'), side = rail.userData.railSide;
+        const positions = rail.geometry.getAttribute('position');
+        const side = rail.userData.railSide;
         for (let j = 0; j <= 64; j++) {
-            const t = j / 32 - 1, at = Math.abs(t), y = t * (1.04 - .075 * draw), gap = .028 * smooth((at - .18) / .17) * (1 - Math.pow(at, 7)), z = -.09 * Math.sin(at * Math.PI) + draw * .18 * at * at + vibration * at;
-            const radius = .008 * (1 - .40 * at);
+            const verticalFraction = j / 32 - 1;
+            const absoluteFraction = Math.abs(verticalFraction);
+            const y = verticalFraction * (1.04 - 0.075 * draw);
+            const gap = 0.028 * smooth((absoluteFraction - 0.18) / 0.17) * (1 - Math.pow(absoluteFraction, 7));
+            const z = -0.09 * Math.sin(absoluteFraction * Math.PI) +
+                draw * 0.18 * absoluteFraction * absoluteFraction +
+                vibration * absoluteFraction;
+            const radius = 0.008 * (1 - 0.4 * absoluteFraction);
             for (let i = 0; i <= 8; i++) {
-                const a = i / 8 * Math.PI * 2;
-                p.setXYZ(j * 9 + i, side * gap + Math.cos(a) * radius, y, z + Math.sin(a) * radius * 1.35);
+                const angle = (i / 8) * Math.PI * 2;
+                positions.setXYZ(j * 9 + i, side * gap + Math.cos(angle) * radius, y, z + Math.sin(angle) * radius * 1.35);
             }
         }
-        p.needsUpdate = true;
+        positions.needsUpdate = true;
         rail.geometry.computeVertexNormals();
         rail.geometry.computeBoundingSphere();
     }
-    const line = group.userData.bowString, sp = line.geometry.getAttribute('position');
-    const tip = 1.04 - .075 * draw, z = draw * .18 + vibration, nock = bowNock(draw);
-    sp.setXYZ(0, 0, -tip, z);
-    sp.setXYZ(1, nock.x, nock.y, nock.z);
-    sp.setXYZ(2, 0, tip, z);
-    sp.needsUpdate = true;
+    const line = group.userData.bowString;
+    const stringPositions = line.geometry.getAttribute('position');
+    const tip = 1.04 - 0.075 * draw;
+    const z = draw * 0.18 + vibration;
+    const nock = bowNock(draw);
+    stringPositions.setXYZ(0, 0, -tip, z);
+    stringPositions.setXYZ(1, nock.x, nock.y, nock.z);
+    stringPositions.setXYZ(2, 0, tip, z);
+    stringPositions.needsUpdate = true;
     line.geometry.computeBoundingSphere();
 }
-/** Seconds are deterministic for inspection, and shared by the actual input/physics path. */
-export function sampleBowPose(charge, releaseSeconds = -1, releaseCharge = 1, time = 0, aiming = false) {
-    let draw = smooth(charge), kick = 0, vibration = 0, reload = 0, phase = charge >= 1 ? 'hold' : charge > 0 ? 'draw' : 'ready';
+/**
+ * Samples the deterministic bow pose shared by inspection and live input paths.
+ *
+ * @param charge - Normalized current draw charge.
+ * @param releaseSeconds - Seconds since release, or a negative value when not releasing.
+ * @param releaseCharge - Normalized charge captured at release.
+ * @param time - Simulation time in seconds, used only for held-bow motion.
+ * @param isAiming - Whether the player is using steady aim.
+ * @returns A newly allocated first-person bow pose.
+ */
+export function sampleBowPose(charge, releaseSeconds = -1, releaseCharge = 1, time = 0, isAiming = false) {
+    let draw = smooth(charge);
+    let kick = 0;
+    let vibration = 0;
+    let reload = 0;
+    let phase = 'ready';
+    if (charge >= 1) {
+        phase = 'hold';
+    }
+    else if (charge > 0) {
+        phase = 'draw';
+    }
     let arrowVisible = true;
     if (releaseSeconds >= 0 && releaseSeconds < 1.05) {
-        const t = releaseSeconds;
-        draw = smooth(releaseCharge) * (1 - smooth(t / .065));
-        kick = Math.sin(Math.min(1, t / .11) * Math.PI) * Math.exp(-t * 7);
-        vibration = Math.sin(t * 115) * Math.exp(-t * 24) * .035 * releaseCharge;
-        reload = Math.sin(smooth((t - .16) / .84) * Math.PI);
-        arrowVisible = t > .91;
-        phase = t < .12 ? 'release' : t < .86 ? 'nock' : 'recover';
+        const elapsedReleaseSeconds = releaseSeconds;
+        draw = smooth(releaseCharge) * (1 - smooth(elapsedReleaseSeconds / 0.065));
+        kick =
+            Math.sin(Math.min(1, elapsedReleaseSeconds / 0.11) * Math.PI) *
+                Math.exp(-elapsedReleaseSeconds * 7);
+        vibration =
+            Math.sin(elapsedReleaseSeconds * 115) *
+                Math.exp(-elapsedReleaseSeconds * 24) *
+                0.035 *
+                releaseCharge;
+        reload = Math.sin(smooth((elapsedReleaseSeconds - 0.16) / 0.84) * Math.PI);
+        arrowVisible = elapsedReleaseSeconds > 0.91;
+        if (elapsedReleaseSeconds < 0.12) {
+            phase = 'release';
+        }
+        else if (elapsedReleaseSeconds < 0.86) {
+            phase = 'nock';
+        }
+        else {
+            phase = 'recover';
+        }
     }
-    const hold = draw > .96 ? Math.sin(time * 13) * .002 : 0;
-    const grip = V((aiming ? .09 : .23) - draw * .105 + hold, -.285 + draw * .13 - kick * .026 - reload * .13, -.88 - draw * .045 + kick * .036);
-    const roll = -.30 + draw * .20 + kick * .085 - reload * .35;
+    const hold = draw > 0.96 ? Math.sin(time * 13) * 0.002 : 0;
+    const grip = vector((isAiming ? 0.09 : 0.23) - draw * 0.105 + hold, -0.285 + draw * 0.13 - kick * 0.026 - reload * 0.13, -0.88 - draw * 0.045 + kick * 0.036);
+    const roll = -0.3 + draw * 0.2 + kick * 0.085 - reload * 0.35;
     const pull = bowNock(draw);
-    pull.x += releaseSeconds >= 0 && releaseSeconds < .16 ? smooth(releaseSeconds / .16) * .07 : 0;
+    pull.x += releaseSeconds >= 0 && releaseSeconds < 0.16 ? smooth(releaseSeconds / 0.16) * 0.07 : 0;
     if (reload) {
-        pull.x += reload * .24;
-        pull.y += reload * .58;
-        pull.z += reload * .18;
+        pull.x += reload * 0.24;
+        pull.y += reload * 0.58;
+        pull.z += reload * 0.18;
     }
     return { draw, grip, roll, pull, vibration, arrowVisible, phase };
 }
-export function firstPersonSkin() { return skinMaterial(0xc0a28b); }
+/**
+ * Creates the original procedural first-person skin material.
+ *
+ * @returns A new textured material owned by the caller.
+ */
+export function firstPersonSkin() {
+    return skinMaterial(0xc0a28b);
+}

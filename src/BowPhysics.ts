@@ -1,39 +1,258 @@
-/** Pure collision/ballistics helpers shared by the browser runtime and its tests. */
-export interface Vec {x: number; y: number; z: number}
-export interface Cover {x: number; z: number; r: number; height: number}
+/**
+ * Provides dependency-free bow ballistics and legacy cylinder collision helpers.
+ * It does not own mesh collision, scene state, or frame timing.
+ */
+
+/** A three-dimensional position or displacement measured in meters. */
+export interface VectorLike {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A vertical cylindrical obstacle used by geometry-free callers and tests. */
+export interface Cover {
+  x: number;
+  z: number;
+  r: number;
+  height: number;
+}
+
+// Earth-normal gravity preserves the original arrow and jump trajectories in meters per second.
 export const GRAVITY = 9.81;
+
+// A full draw takes 1.15 seconds so quick shots remain possible but weaker.
 export const BOW_DRAW_SECONDS = 1.15;
-export function shotSpeed(charge: number) { return 18 + Math.min(1, Math.max(0, charge)) * 38; }
-export function shotDamage(charge: number, headshot = false) { return Math.round((24 + Math.min(1, Math.max(0, charge)) * 46) * (headshot ? 1.8 : 1)); }
-/** Earliest segment/sphere intersection in [0,1]; swept tests prevent tunnelling. */
-export function segmentSphere(a: Vec, b: Vec, c: Vec, radius: number): number | null {
-    const dx=b.x-a.x, dy=b.y-a.y, dz=b.z-a.z;
-    const ox=a.x-c.x, oy=a.y-c.y, oz=a.z-c.z;
-    const aa=dx*dx+dy*dy+dz*dz, cc=ox*ox+oy*oy+oz*oz-radius*radius;
-    if (cc<=0) return 0;
-    if (aa<1e-12) return null;
-    const bb=2*(ox*dx+oy*dy+oz*dz), disc=bb*bb-4*aa*cc;
-    if(disc<0) return null;
-    const t=(-bb-Math.sqrt(disc))/(2*aa);
-    return t>=0 && t<=1 ? t : null;
+
+// An uncharged arrow starts at 18 m/s, matching the original close-range response.
+const MIN_ARROW_SPEED_METERS_PER_SECOND = 18;
+
+// A full draw adds 38 m/s, producing the original 56 m/s maximum arrow speed.
+const ARROW_SPEED_RANGE_METERS_PER_SECOND = 38;
+
+// An uncharged body shot deals 24 health points.
+const MIN_SHOT_DAMAGE = 24;
+
+// A full draw adds 46 health points before any headshot multiplier.
+const SHOT_DAMAGE_RANGE = 46;
+
+// Headshots deal 1.8 times body damage, preserving the existing two-hit combat balance.
+const HEADSHOT_DAMAGE_MULTIPLIER = 1.8;
+
+// Squared lengths below this threshold are treated as zero to avoid unstable division.
+const SQUARED_LENGTH_EPSILON = 1e-12;
+
+// The legacy movement helper keeps geometry-free callers inside the original 27-meter arena.
+const LEGACY_ARENA_RADIUS_METERS = 27;
+
+// Two resolution passes handle overlaps between neighboring legacy cylinders.
+const COVER_RESOLUTION_PASSES = 2;
+
+// Separations below this distance cannot provide a stable push direction.
+const COVER_DIRECTION_EPSILON_METERS = 0.0001;
+
+// The original player collision radius is retained for geometry-free callers.
+const DEFAULT_ACTOR_RADIUS_METERS = 0.38;
+
+// Quadratic equations use four times the leading and constant coefficients.
+const QUADRATIC_DISCRIMINANT_FACTOR = 4;
+
+/**
+ * Computes arrow launch speed from a normalized draw charge.
+ *
+ * @param charge - Draw charge, clamped to the inclusive range from zero to one.
+ * @returns Arrow speed in meters per second.
+ */
+export function shotSpeed(charge: number): number {
+  const normalizedCharge = Math.min(1, Math.max(0, charge));
+
+  return MIN_ARROW_SPEED_METERS_PER_SECOND + normalizedCharge * ARROW_SPEED_RANGE_METERS_PER_SECOND;
 }
-/** Vertical cylinder covers include top/bottom caps, not just a horizontal radius. */
-export function segmentCover(a: Vec, b: Vec, c: Cover): number | null {
-    const dx=b.x-a.x,dz=b.z-a.z,dy=b.y-a.y,ox=a.x-c.x,oz=a.z-c.z;
-    const aa=dx*dx+dz*dz,bb=2*(ox*dx+oz*dz),cc=ox*ox+oz*oz-c.r*c.r;
-    let lo=0,hi=1;
-    if (aa<1e-12) {if(cc>0)return null;}
-    else {const d=bb*bb-4*aa*cc;if(d<0)return null;lo=Math.max(lo,(-bb-Math.sqrt(d))/(2*aa));hi=Math.min(hi,(-bb+Math.sqrt(d))/(2*aa));}
-    if(Math.abs(dy)<1e-12) {if(a.y<0 || a.y>c.height)return null;}
-    else {const t0=-a.y/dy,t1=(c.height-a.y)/dy;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));}
-    return lo<=hi ? lo : null;
+
+/**
+ * Computes integer damage for an arrow hit.
+ *
+ * @param charge - Draw charge, clamped to the inclusive range from zero to one.
+ * @param isHeadshot - Whether the hit receives the headshot multiplier.
+ * @returns Damage in health points.
+ */
+export function shotDamage(charge: number, isHeadshot = false): number {
+  const normalizedCharge = Math.min(1, Math.max(0, charge));
+  const bodyDamage = MIN_SHOT_DAMAGE + normalizedCharge * SHOT_DAMAGE_RANGE;
+  const damageMultiplier = isHeadshot ? HEADSHOT_DAMAGE_MULTIPLIER : 1;
+
+  return Math.round(bodyDamage * damageMultiplier);
 }
-export function moveWithCover(position: Vec, dx: number, dz: number, covers: Cover[], radius=0.38) {
-    const next={x:position.x+dx,y:position.y,z:position.z+dz};
-    const distance=Math.hypot(next.x,next.z);if(distance>27){next.x*=27/distance;next.z*=27/distance;}
-    for(let pass=0;pass<2;pass++) for(const c of covers) {
-        const x=next.x-c.x,z=next.z-c.z,d=Math.hypot(x,z),min=c.r+radius;
-        if(d<min){if(d>0.0001){next.x=c.x+x/d*min;next.z=c.z+z/d*min;}else{next.x=c.x+min;}}
+
+/**
+ * Finds the earliest intersection between a line segment and a sphere.
+ *
+ * @param start - Segment start position in meters.
+ * @param end - Segment end position in meters.
+ * @param center - Sphere center position in meters.
+ * @param radius - Sphere radius in meters.
+ * @returns The segment fraction from zero to one, or `null` when there is no hit.
+ */
+export function segmentSphere(
+  start: VectorLike,
+  end: VectorLike,
+  center: VectorLike,
+  radius: number,
+): number | null {
+  const directionX = end.x - start.x;
+  const directionY = end.y - start.y;
+  const directionZ = end.z - start.z;
+  const offsetX = start.x - center.x;
+  const offsetY = start.y - center.y;
+  const offsetZ = start.z - center.z;
+  const directionLengthSquared =
+    directionX * directionX + directionY * directionY + directionZ * directionZ;
+  const offsetFromSurfaceSquared =
+    offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ - radius * radius;
+
+  if (offsetFromSurfaceSquared <= 0) {
+    return 0;
+  }
+
+  if (directionLengthSquared < SQUARED_LENGTH_EPSILON) {
+    return null;
+  }
+
+  // This is the smaller root of the quadratic ray/sphere intersection equation.
+  const linearCoefficient =
+    2 * (offsetX * directionX + offsetY * directionY + offsetZ * directionZ);
+  const discriminant =
+    linearCoefficient * linearCoefficient -
+    QUADRATIC_DISCRIMINANT_FACTOR * directionLengthSquared * offsetFromSurfaceSquared;
+
+  if (discriminant < 0) {
+    return null;
+  }
+
+  const intersectionFraction =
+    (-linearCoefficient - Math.sqrt(discriminant)) / (2 * directionLengthSquared);
+  const isOnSegment = intersectionFraction >= 0 && intersectionFraction <= 1;
+
+  return isOnSegment ? intersectionFraction : null;
+}
+
+/**
+ * Finds the earliest intersection with a capped vertical cylinder.
+ *
+ * @param start - Segment start position in meters.
+ * @param end - Segment end position in meters.
+ * @param cover - Cylinder origin, radius, and height in meters.
+ * @returns The segment fraction from zero to one, or `null` when there is no hit.
+ */
+export function segmentCover(start: VectorLike, end: VectorLike, cover: Cover): number | null {
+  const directionX = end.x - start.x;
+  const directionY = end.y - start.y;
+  const directionZ = end.z - start.z;
+  const offsetX = start.x - cover.x;
+  const offsetZ = start.z - cover.z;
+  const horizontalLengthSquared = directionX * directionX + directionZ * directionZ;
+  const linearCoefficient = 2 * (offsetX * directionX + offsetZ * directionZ);
+  const offsetFromSideSquared = offsetX * offsetX + offsetZ * offsetZ - cover.r * cover.r;
+  let entryFraction = 0;
+  let exitFraction = 1;
+
+  if (horizontalLengthSquared < SQUARED_LENGTH_EPSILON) {
+    if (offsetFromSideSquared > 0) {
+      return null;
     }
-    return next;
+  } else {
+    const discriminant =
+      linearCoefficient * linearCoefficient -
+      QUADRATIC_DISCRIMINANT_FACTOR * horizontalLengthSquared * offsetFromSideSquared;
+
+    if (discriminant < 0) {
+      return null;
+    }
+
+    const squareRoot = Math.sqrt(discriminant);
+    entryFraction = Math.max(
+      entryFraction,
+      (-linearCoefficient - squareRoot) / (2 * horizontalLengthSquared),
+    );
+    exitFraction = Math.min(
+      exitFraction,
+      (-linearCoefficient + squareRoot) / (2 * horizontalLengthSquared),
+    );
+  }
+
+  if (Math.abs(directionY) < SQUARED_LENGTH_EPSILON) {
+    const isOutsideVerticalRange = start.y < 0 || start.y > cover.height;
+
+    if (isOutsideVerticalRange) {
+      return null;
+    }
+  } else {
+    const floorFraction = -start.y / directionY;
+    const ceilingFraction = (cover.height - start.y) / directionY;
+    entryFraction = Math.max(entryFraction, Math.min(floorFraction, ceilingFraction));
+    exitFraction = Math.min(exitFraction, Math.max(floorFraction, ceilingFraction));
+  }
+
+  return entryFraction <= exitFraction ? entryFraction : null;
+}
+
+// Moves a point outside one cylindrical obstacle when their horizontal radii overlap.
+function resolveCoverOverlap(position: VectorLike, cover: Cover, radius: number): void {
+  const offsetX = position.x - cover.x;
+  const offsetZ = position.z - cover.z;
+  const distance = Math.hypot(offsetX, offsetZ);
+  const minimumDistance = cover.r + radius;
+
+  if (distance >= minimumDistance) {
+    return;
+  }
+
+  if (distance > COVER_DIRECTION_EPSILON_METERS) {
+    position.x = cover.x + (offsetX / distance) * minimumDistance;
+    position.z = cover.z + (offsetZ / distance) * minimumDistance;
+
+    return;
+  }
+
+  position.x = cover.x + minimumDistance;
+}
+
+/**
+ * Applies legacy flat-ground movement against cylindrical cover and the old arena boundary.
+ *
+ * @param position - Current actor position in meters.
+ * @param movementX - Requested X-axis displacement in meters.
+ * @param movementZ - Requested Z-axis displacement in meters.
+ * @param covers - Vertical cylindrical obstacles to resolve.
+ * @param radius - Actor radius in meters.
+ * @returns A new resolved position; input objects are not mutated.
+ */
+// Preserve the five-argument legacy API used by geometry-free integrations.
+// eslint-disable-next-line max-params
+export function moveWithCover(
+  position: VectorLike,
+  movementX: number,
+  movementZ: number,
+  covers: Cover[],
+  radius = DEFAULT_ACTOR_RADIUS_METERS,
+): VectorLike {
+  const nextPosition = {
+    x: position.x + movementX,
+    y: position.y,
+    z: position.z + movementZ,
+  };
+  const distanceFromOrigin = Math.hypot(nextPosition.x, nextPosition.z);
+
+  if (distanceFromOrigin > LEGACY_ARENA_RADIUS_METERS) {
+    nextPosition.x *= LEGACY_ARENA_RADIUS_METERS / distanceFromOrigin;
+    nextPosition.z *= LEGACY_ARENA_RADIUS_METERS / distanceFromOrigin;
+  }
+
+  for (let pass = 0; pass < COVER_RESOLUTION_PASSES; pass += 1) {
+    for (const cover of covers) {
+      resolveCoverOverlap(nextPosition, cover, radius);
+    }
+  }
+
+  return nextPosition;
 }

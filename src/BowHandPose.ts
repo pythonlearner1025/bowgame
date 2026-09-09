@@ -1,31 +1,184 @@
-import {Bone,Matrix4,Vector3,Quaternion} from 'threepipe';
-import type {HumanAsset} from './BowHumanAsset.js';
-const v=(a:number[])=>new Vector3().fromArray(a);
-/** Match both the long axis and knuckle row; a direction-only rotation leaves arbitrary wrist roll. */
-export function handOrientation(data:HumanAsset,side:string,direction:Vector3,across:Vector3){
-    const bone=(name:string)=>data.bones.find(b=>b.name===name+'.'+side)!;
-    const frame=(d:Vector3,a:Vector3)=>{const x=d.clone().normalize(),y=a.clone().addScaledVector(x,-a.dot(x)).normalize(),z=x.clone().cross(y);return new Matrix4().makeBasis(x,y,z);};
-    const d=v(bone('finger3-1').head).sub(v(bone('wrist').head)),a=v(bone('finger5-1').head).sub(v(bone('finger2-1').head));
-    return new Quaternion().setFromRotationMatrix(frame(direction,across).multiply(frame(d,a).invert()));
+/**
+ * Derives anatomical wrist orientation and finger curls from the bundled human rig data.
+ * It does not load the asset, position arms, or animate whole-body movement.
+ */
+
+/*
+ * Curl angles and millimeter-scale offsets are authored pose data calibrated to this hand rig.
+ * They remain inline beside the affected joints so the anatomical shape can be reviewed directly.
+ */
+/* eslint-disable no-magic-numbers */
+
+import { Bone, Matrix4, Quaternion, Vector3 } from 'threepipe';
+import type { HumanAsset } from './BowHumanAsset.js';
+
+/** Left or right suffix used by the bundled human skeleton. */
+export type HandSide = 'L' | 'R';
+
+/** Inputs used to pose every finger on one hand. */
+export interface HandFingerPoseOptions {
+  data: HumanAsset;
+  bones: Bone[];
+  side: HandSide;
+  isHooked: boolean;
+  openness?: number;
 }
-/** Native joint axes and separate saddle-joint thumb opposition retain the connected anatomical surface. */
-export function poseHandFingers(data:HumanAsset,bones:Bone[],side:string,hook:boolean,openness=0){
-    const find=(name:string)=>data.bones.findIndex(b=>b.name===name+'.'+side);
-    const curlSign=side==='L'?1:-1;
-    const across=v(data.bones[find('finger5-1')].head).sub(v(data.bones[find('finger2-1')].head)).normalize();
-    for(let finger=2;finger<=5;finger++){
-        const angles=hook?([[.24,1.10,.56],[.28,1.13,.60],[.32,1.12,.61],[.80,1.10,.65]][finger-2]):[.70,1.05,.62];
-        const root=find(`finger${finger}-1`);bones[root].position.copy(v(data.bones[root].position));if(hook)bones[root].position.addScaledVector(across,[.006,0,-.005,-.011][finger-2]);
-        for(let joint=1;joint<=3;joint++){const i=find(`finger${finger}-${joint}`);if(i>=0)bones[i].quaternion.setFromAxisAngle(across,curlSign*angles[joint-1]*(1-openness*(hook?.72:.95)));}
+
+const HOOKED_FINGER_ANGLES = [
+  [0.24, 1.1, 0.56],
+  [0.28, 1.13, 0.6],
+  [0.32, 1.12, 0.61],
+  [0.8, 1.1, 0.65],
+] as const;
+
+const RELAXED_FINGER_ANGLES = [0.7, 1.05, 0.62] as const;
+const HOOKED_ROOT_OFFSETS_METERS = [0.006, 0, -0.005, -0.011] as const;
+
+function vectorFromArray(values: number[]): Vector3 {
+  return new Vector3().fromArray(values);
+}
+
+function findBoneData(data: HumanAsset, name: string, side: HandSide) {
+  const boneData = data.bones.find((candidate) => candidate.name === `${name}.${side}`);
+
+  if (!boneData) {
+    throw new Error(`Human rig is missing required bone ${name}.${side}`);
+  }
+
+  return boneData;
+}
+
+function makeOrientationFrame(direction: Vector3, across: Vector3): Matrix4 {
+  const xAxis = direction.clone().normalize();
+  const yAxis = across.clone().addScaledVector(xAxis, -across.dot(xAxis)).normalize();
+  const zAxis = xAxis.clone().cross(yAxis);
+
+  return new Matrix4().makeBasis(xAxis, yAxis, zAxis);
+}
+
+/**
+ * Matches both a hand's long axis and knuckle row to avoid arbitrary wrist roll.
+ *
+ * @param data - Parsed bundled human asset containing rest-pose bone coordinates.
+ * @param side - Left or right hand suffix used by the rig.
+ * @param direction - Desired world-space direction from wrist toward fingers.
+ * @param across - Desired world-space direction across the knuckle row.
+ * @returns The quaternion that maps the rest-pose hand frame to the desired frame.
+ */
+export function handOrientation(
+  data: HumanAsset,
+  side: HandSide,
+  direction: Vector3,
+  across: Vector3,
+): Quaternion {
+  const middleFinger = findBoneData(data, 'finger3-1', side);
+  const wrist = findBoneData(data, 'wrist', side);
+  const littleFinger = findBoneData(data, 'finger5-1', side);
+  const indexFinger = findBoneData(data, 'finger2-1', side);
+  const restDirection = vectorFromArray(middleFinger.head).sub(vectorFromArray(wrist.head));
+  const restAcross = vectorFromArray(littleFinger.head).sub(vectorFromArray(indexFinger.head));
+  const desiredFrame = makeOrientationFrame(direction, across);
+  const restFrameInverse = makeOrientationFrame(restDirection, restAcross).invert();
+
+  return new Quaternion().setFromRotationMatrix(desiredFrame.multiply(restFrameInverse));
+}
+
+function makeBoneIndexFinder(data: HumanAsset, side: HandSide): (name: string) => number {
+  return (name: string) => data.bones.findIndex((boneData) => boneData.name === `${name}.${side}`);
+}
+
+function requireBoneIndex(index: number, name: string, side: HandSide): number {
+  if (index < 0) {
+    throw new Error(`Human rig is missing required bone ${name}.${side}`);
+  }
+
+  return index;
+}
+
+function poseLongFingers(options: HandFingerPoseOptions, across: Vector3): void {
+  const { data, bones, side, isHooked, openness = 0 } = options;
+  const findIndex = makeBoneIndexFinder(data, side);
+  const curlSign = side === 'L' ? 1 : -1;
+
+  for (let fingerNumber = 2; fingerNumber <= 5; fingerNumber += 1) {
+    const angleIndex = fingerNumber - 2;
+    const angles = isHooked ? HOOKED_FINGER_ANGLES[angleIndex] : RELAXED_FINGER_ANGLES;
+    const rootName = `finger${fingerNumber}-1`;
+    const rootIndex = requireBoneIndex(findIndex(rootName), rootName, side);
+    bones[rootIndex].position.copy(vectorFromArray(data.bones[rootIndex].position));
+
+    if (isHooked) {
+      bones[rootIndex].position.addScaledVector(across, HOOKED_ROOT_OFFSETS_METERS[angleIndex]);
     }
-    const first=find('finger1-1'),second=find('finger1-2'),third=find('finger1-3');
-    const thumbDirection=v(data.bones[second].head).sub(v(data.bones[first].head)).normalize();
-    const palmDirection=v(data.bones[find('finger3-1')].head).sub(v(data.bones[find('wrist')].head)).normalize();
-    const thumbAxis=thumbDirection.clone().cross(palmDirection).normalize();
-    const palmNormal=palmDirection.clone().cross(across).multiplyScalar(-curlSign).normalize();
-    for(const [joint,amount] of [[first,hook?.32:.20],[second,hook?.44:.70],[third,hook?.22:.40]]){
-        const direction=v(data.bones[joint].tail).sub(v(data.bones[joint].head)).normalize();
-        bones[joint].quaternion.setFromAxisAngle(direction.cross(palmNormal).normalize(),amount);
+
+    for (let jointNumber = 1; jointNumber <= 3; jointNumber += 1) {
+      const jointName = `finger${fingerNumber}-${jointNumber}`;
+      const jointIndex = findIndex(jointName);
+
+      if (jointIndex < 0) {
+        continue;
+      }
+
+      const openFraction = openness * (isHooked ? 0.72 : 0.95);
+      const angle = curlSign * angles[jointNumber - 1] * (1 - openFraction);
+      bones[jointIndex].quaternion.setFromAxisAngle(across, angle);
     }
-    bones[first].quaternion.premultiply(new Quaternion().setFromAxisAngle(thumbAxis,hook?.10:.90));
+  }
+}
+
+function poseThumb(options: HandFingerPoseOptions, across: Vector3): void {
+  const { data, bones, side, isHooked } = options;
+  const findIndex = makeBoneIndexFinder(data, side);
+  const firstIndex = requireBoneIndex(findIndex('finger1-1'), 'finger1-1', side);
+  const secondIndex = requireBoneIndex(findIndex('finger1-2'), 'finger1-2', side);
+  const thirdIndex = requireBoneIndex(findIndex('finger1-3'), 'finger1-3', side);
+  const wristIndex = requireBoneIndex(findIndex('wrist'), 'wrist', side);
+  const middleIndex = requireBoneIndex(findIndex('finger3-1'), 'finger3-1', side);
+  const curlSign = side === 'L' ? 1 : -1;
+  const thumbDirection = vectorFromArray(data.bones[secondIndex].head)
+    .sub(vectorFromArray(data.bones[firstIndex].head))
+    .normalize();
+  const palmDirection = vectorFromArray(data.bones[middleIndex].head)
+    .sub(vectorFromArray(data.bones[wristIndex].head))
+    .normalize();
+  const thumbAxis = thumbDirection.clone().cross(palmDirection).normalize();
+  const palmNormal = palmDirection.clone().cross(across).multiplyScalar(-curlSign).normalize();
+  const jointAngles: ReadonlyArray<readonly [number, number]> = [
+    [firstIndex, isHooked ? 0.32 : 0.2],
+    [secondIndex, isHooked ? 0.44 : 0.7],
+    [thirdIndex, isHooked ? 0.22 : 0.4],
+  ];
+
+  for (const [jointIndex, angle] of jointAngles) {
+    const jointData = data.bones[jointIndex];
+    const direction = vectorFromArray(jointData.tail)
+      .sub(vectorFromArray(jointData.head))
+      .normalize();
+    const axis = direction.cross(palmNormal).normalize();
+    bones[jointIndex].quaternion.setFromAxisAngle(axis, angle);
+  }
+
+  const oppositionAngle = isHooked ? 0.1 : 0.9;
+  bones[firstIndex].quaternion.premultiply(
+    new Quaternion().setFromAxisAngle(thumbAxis, oppositionAngle),
+  );
+}
+
+/**
+ * Applies native joint-axis curls and thumb opposition to one hand rig.
+ *
+ * @param options - Asset, live bones, side, grip mode, and normalized openness.
+ * @returns Nothing; the supplied live bones are mutated in place.
+ */
+export function poseHandFingers(options: HandFingerPoseOptions): void {
+  const { data, side } = options;
+  const findIndex = makeBoneIndexFinder(data, side);
+  const littleFingerIndex = requireBoneIndex(findIndex('finger5-1'), 'finger5-1', side);
+  const indexFingerIndex = requireBoneIndex(findIndex('finger2-1'), 'finger2-1', side);
+  const across = vectorFromArray(data.bones[littleFingerIndex].head)
+    .sub(vectorFromArray(data.bones[indexFingerIndex].head))
+    .normalize();
+
+  poseLongFingers(options, across);
+  poseThumb(options, across);
 }
