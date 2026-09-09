@@ -7,7 +7,7 @@ import {chromium} from '@playwright/test';
 const root=resolve(new URL('../..',import.meta.url).pathname);
 const label=process.env.BOWGAME_FLICKER_LABEL??'local';
 const evidenceDir=resolve(root,'evidence');
-let worker=null,browser=null;
+let worker=null,browser=null,baseURL=process.env.BOWGAME_BASE_URL;
 
 async function freePort(){
   const server=createServer();await new Promise((ok,fail)=>{server.once('error',fail);server.listen(0,'127.0.0.1',ok);});
@@ -122,10 +122,8 @@ function summarize(result){
 }
 
 try{
-  const port=await freePort(),baseURL=`http://127.0.0.1:${port}`;
-  worker=spawn(resolve(root,'node_modules/.bin/wrangler'),['dev','--local','--port',String(port),'--log-level','warn'],{cwd:root,stdio:['ignore','pipe','pipe']});
-  const workerOutput=[];worker.stdout.on('data',chunk=>workerOutput.push(String(chunk)));worker.stderr.on('data',chunk=>workerOutput.push(String(chunk)));
-  await waitForWorker(baseURL,worker);
+  const workerOutput=[];
+  if(!baseURL){const port=await freePort();baseURL=`http://127.0.0.1:${port}`;worker=spawn(resolve(root,'node_modules/.bin/wrangler'),['dev','--local','--port',String(port),'--log-level','warn'],{cwd:root,stdio:['ignore','pipe','pipe']});worker.stdout.on('data',chunk=>workerOutput.push(String(chunk)));worker.stderr.on('data',chunk=>workerOutput.push(String(chunk)));await waitForWorker(baseURL,worker);}
   const launched=await launchBrowser();browser=launched.instance;
   const context=await browser.newContext({viewport:{width:1280,height:720}}),results=[],errors=[];
   const solo=await context.newPage();errors.push(...await enter(solo,`${baseURL}/?solo=1`,null));results.push(await capture(solo,'solo-one-client'));await solo.close();

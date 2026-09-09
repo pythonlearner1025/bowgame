@@ -28,6 +28,35 @@ npm run preview
 
 Open the printed local URL. Click **ENTER ARENA** to enable interaction and audio. The default controls are WASD/arrows, mouse aim, hold/release LMB, RMB steady aim, Shift sprint, Space jump, R restart, Escape pause, and M mute.
 
+## Diagnose flicker or lag
+
+Client diagnostics are always collected locally in a bounded, roughly five-minute ring buffer; no gameplay payloads are stored. Press **F8** to show or hide the compact debug overlay. Press **F9** to download the buffer as `bowgame-telemetry-<timestamp>.json`. Browser automation can read the same data with `window.__KITE_BOW_TELEMETRY__.exportData()`.
+
+Each `samples[]` entry covers about one second and contains:
+
+- `at`, `windowMs`, `visible`, and `activeFrames`;
+- `frameTimeMs` and `gameCpuMs` (`count`, `p50`, `p95`, `max`), plus `renders`;
+- timestamped `rAFGaps` over 100 ms and `longTasks` from `PerformanceObserver` (useful for GC-like or other main-thread stalls);
+- `rttMs`, and `network.inbound` / `network.outbound` message counts and UTF-8 bytes, including `byType` totals;
+- timestamped `reconnects` and `socketCloses` (`code`, `wasClean`);
+- current `canvas` metrics and `canvasChanges` for backing/client size, device and renderer pixel ratios, and render scale;
+- `remoteStateStaleness.players` and `maxMs`, measuring time since the last state frame from each remote player.
+
+The `BowRoom` Worker writes JSON-only metadata to Workers Logs and never logs WebSocket payloads. Every line includes `service`, `event`, and `timestamp`.
+
+| `event` | Additional fields |
+|---|---|
+| `hibernation_wake` | `connectedCount` |
+| `join` | `playerId`, `slot`, `connectedCount` |
+| `leave` | `playerId`, `slot`, `code`, `wasClean`, `connectedCount` |
+| `full` | `connectedCount`, `roomCap` |
+| `round_end` | `round`, `winnerId`, `connectedCount` |
+| `round_reset` | `round`, `connectedCount` |
+| `exception` | `handler`, `errorName`, `errorMessage`, `connectedCount` |
+| `summary` | `windowStartedAt`, `windowMs`, `inboundMessagesByType`, `outboundMessagesByType`, `broadcastFanOut`, `maxMessageBytes`, `connectedCount` |
+
+The hibernation-friendly 60-second summary is emitted on the first room activity after each minute; an idle room does not stay awake just to log.
+
 Run the deterministic scene check and the headless player smoke test with:
 
 ```sh
@@ -51,6 +80,14 @@ Open `http://localhost:8787/?online=1`. Use `?solo=1` to force solo mode. The fu
 ```sh
 npm run e2e:online
 ```
+
+Run the local Metal-first consecutive-frame probe (with automatic SwiftShader fallback) with:
+
+```sh
+npm run probe:flicker
+```
+
+It writes `evidence/flicker-local.json` / `.png` by default. Set `BOWGAME_FLICKER_LABEL=<label>` to select another evidence label; the checked-in investigation baselines use `before` and `after`.
 
 To deploy the static build and room relay to the configured Cloudflare account:
 

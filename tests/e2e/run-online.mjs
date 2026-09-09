@@ -3,7 +3,7 @@ import {createServer} from 'node:net';
 import {resolve} from 'node:path';
 
 const root=resolve(new URL('../..',import.meta.url).pathname);
-let worker=null,baseURL=process.env.BOWGAME_BASE_URL;
+let worker=null,baseURL=process.env.BOWGAME_BASE_URL,workerOutput='';
 
 async function freePort(){
   const server=createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
@@ -20,9 +20,10 @@ try{
   if(!baseURL){
     const port=await freePort();baseURL=`http://127.0.0.1:${port}`;
     worker=spawn(resolve(root,'node_modules/.bin/wrangler'),['dev','--local','--port',String(port), '--log-level','warn'],{cwd:root,stdio:['ignore','pipe','pipe']});
-    worker.stdout.on('data',chunk=>process.stdout.write(`[wrangler] ${chunk}`));worker.stderr.on('data',chunk=>process.stderr.write(`[wrangler] ${chunk}`));
+    worker.stdout.on('data',chunk=>{workerOutput+=String(chunk);process.stdout.write(`[wrangler] ${chunk}`);});worker.stderr.on('data',chunk=>{workerOutput+=String(chunk);process.stderr.write(`[wrangler] ${chunk}`);});
     await waitForWorker(baseURL,worker);
   }
   const playwright=spawn(resolve(root,'node_modules/.bin/playwright'),['test','--config','tests/e2e/playwright.online.config.mjs'],{cwd:root,stdio:'inherit',env:{...process.env,BOWGAME_BASE_URL:baseURL,BOWGAME_EVIDENCE_MODE:baseURL.includes('workers.dev')?'live':'local'}});
   const code=await new Promise((resolve,reject)=>{playwright.once('error',reject);playwright.once('exit',value=>resolve(value??1));});if(code!==0)process.exitCode=code;
+  if(workerOutput.includes('"event":"exception"')){console.error('wrangler emitted a structured room exception');process.exitCode=1;}
 }finally{await stopWorker(worker);}

@@ -94,3 +94,11 @@ SQLite-backed Durable Objects are available on Cloudflare's Workers Free plan. N
 Build and deploy from `/private/tmp/bowgame` with `npm run build && npx wrangler deploy`. The current live route is `https://bowgame.minjunesv0.workers.dev`. Roll back to the preceding deployment with `npx wrangler rollback`; in an emergency, remove the Worker and its route with `npx wrangler delete`. These commands affect the configured account `53a144fad4e15ca51c32da9b9fe25d4a`.
 
 The player cap and score limit are centralized as `BOW_ROOM_CAP` and `BOW_SCORE_LIMIT` in `src/BowProtocol.ts`; change them there, run `npm test`, `npm run e2e:online`, rebuild, and deploy. `wrangler.jsonc` pins the Worker name, account, static assets, `BOW_ROOM` binding, SQLite migration, current compatibility date, and observability.
+
+## Changelog
+
+### 2026-09-09 — flicker and lag diagnostics
+
+A consecutive-frame probe on the Mac Metal renderer did not reproduce canvas flicker: static solo, one-client online, and two-client online runs kept constant canvas size, render scale, camera, scene population, and one render per animation frame. It did confirm that the HUD replaced unchanged text nodes about 30 times per second and did still more work when 20 Hz multiplayer state arrived (108 mutation records in the one-client sample and 198 with two clients). The runtime also requested a dirty render directly even though its component return value already asked the Entity Component Plugin for the same render.
+
+HUD writes are now skipped unless their displayed value actually changes, reducing the same probe to zero HUD mutations without changing the display or gameplay. The redundant dirty request was removed so Threepipe remains the sole render-loop owner. A five-minute F8/F9 client telemetry buffer and payload-free structured room logs were added so any real-display recurrence or lag spike can be correlated by timestamp without keeping the Durable Object awake while idle.
