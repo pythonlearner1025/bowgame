@@ -107,6 +107,31 @@ function fixture() {
   return new BowCollision(group);
 }
 
+function jumpRuntime(candidate, position) {
+  const game = new BowGameRuntime({});
+  game.config = { obstacles: [], scoreLimit: 10 };
+  game.collision = candidate;
+  game.player.copy(position);
+
+  return game;
+}
+
+function pressJump(game) {
+  game.keys.add('Space');
+  game.step(dt);
+  game.keys.delete('Space');
+}
+
+function platformFixture() {
+  const group = new Group();
+  const material = new MeshBasicMaterial({ side: DoubleSide });
+  const platform = new Mesh(new BoxGeometry(1, 0.2, 4), material);
+  platform.userData.bowSolid = true;
+  group.add(platform);
+
+  return new BowCollision(group);
+}
+
 test('arrows meet actual weathered granite triangles within 1 cm of reference raycast', () => {
   arena.group.traverse((matrixValue) => {
     if (matrixValue.isMesh) {
@@ -332,6 +357,95 @@ test('real runtime jump input lands on the authored crate without a second jump'
   }
   assert.ok(game.grounded);
   assert.ok(game.player.y > 0.9 && game.player.y < 1);
+});
+
+test('player jumps after standing still for two seconds', () => {
+  const candidate = fixture();
+  const game = jumpRuntime(candidate, new Vector3(2, 0, 0));
+  for (let i = 0; i < 240; i++) {
+    game.step(dt);
+  }
+  const groundedHeight = game.player.y;
+
+  pressJump(game);
+
+  assert.ok(game.player.y > groundedHeight);
+  assert.ok(game.velocity.y > 0);
+  candidate.dispose();
+});
+
+test('player jumps on the first walking step from fresh support', () => {
+  const candidate = fixture();
+  const game = jumpRuntime(candidate, new Vector3(2, 0, 0));
+  game.keys.add('KeyW');
+  game.keys.add('Space');
+
+  game.step(dt);
+
+  assert.ok(game.player.y > 0.03);
+  assert.ok(game.velocity.y > 4);
+  candidate.dispose();
+});
+
+test('player jumps while sprinting from fresh support', () => {
+  const candidate = fixture();
+  const game = jumpRuntime(candidate, new Vector3(2, 0, 0));
+  game.keys.add('KeyW');
+  game.keys.add('ShiftLeft');
+  game.keys.add('Space');
+
+  game.step(dt);
+
+  assert.ok(game.player.y > 0.03);
+  assert.ok(game.velocity.y > 4);
+  candidate.dispose();
+});
+
+test('player jumps immediately from a crate top', () => {
+  const candidate = fixture();
+  const game = jumpRuntime(candidate, new Vector3(0, 0.9501, 0));
+
+  pressJump(game);
+
+  assert.ok(game.player.y > 0.9501);
+  assert.ok(game.velocity.y > 0);
+  candidate.dispose();
+});
+
+test('player jumps inside the coyote window after leaving a platform', () => {
+  const candidate = platformFixture();
+  const game = jumpRuntime(candidate, new Vector3(0, 0.1001, 0));
+  game.keys.add('KeyD');
+  while (game.grounded || game.player.x < 0.9) {
+    game.step(dt);
+  }
+  game.keys.clear();
+  for (let i = 0; i < 6; i++) {
+    game.step(dt);
+  }
+
+  pressJump(game);
+
+  assert.ok(game.velocity.y > 4);
+  candidate.dispose();
+});
+
+test('player cannot jump after the coyote window expires', () => {
+  const candidate = platformFixture();
+  const game = jumpRuntime(candidate, new Vector3(0, 0.1001, 0));
+  game.keys.add('KeyD');
+  while (game.grounded || game.player.x < 0.9) {
+    game.step(dt);
+  }
+  game.keys.clear();
+  for (let i = 0; i < 13; i++) {
+    game.step(dt);
+  }
+
+  pressJump(game);
+
+  assert.ok(game.velocity.y < 1);
+  candidate.dispose();
 });
 
 test('spawn stays under the open shelter canopy instead of treating the tarp as a filled volume', () => {
