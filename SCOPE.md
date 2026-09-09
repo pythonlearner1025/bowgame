@@ -4,7 +4,7 @@
 
 This is a standalone Kite3D project containing the Timber / Ash local bot bow deathmatch. It was ported from `/Users/minjunes/Documents/ChatGPT/kite3d/upstream/packages/threepipe-blueprint-editor` and uses only public project/browser APIs from clean `threepipe@0.5.1`, commit `52c3ec1730463d935a582cf999c3eecb0ac63c14`.
 
-The 12 original `Bow*.ts` modules were copied to `src/`; `BowGameComponent.script.ts` is the project lifecycle adapter. The five modules that remain source-byte-identical are `BowArrowTrail.ts`, `BowPhysics.ts`, `BowReferenceClip.ts`, `BowSceneBatch.ts`, and `BowVisuals.ts`. In `BowAudio.ts`, `BowHumanAsset.ts`, `BowHandPose.ts`, and `BowHandRig.ts`, only project asset paths and browser `.js` import suffixes changed. `BowPerformance.ts` retains telemetry but no longer disables the renderer’s required `info.autoReset` flag. `BowGameRuntime.ts` contains the lifecycle/host refactor described below; its tuning constants are unchanged, with the requested mesh collision and parkour behavior documented below.
+The 12 original `Bow*.ts` modules were copied to `src/`; `BowGameComponent.script.ts` is the project lifecycle adapter. On 2026-09-09, every authored TypeScript and JavaScript module was reformatted, documented, and expanded for human readability under `CODESTYLE.md`. The rewrite deliberately preserves gameplay tuning and public behavior; the full unit, browser, and online suites verify that contract. Asset provenance is tracked separately below, and the committed runtime assets retain their recorded hashes.
 
 ## Structural changes from the editor implementation
 
@@ -30,19 +30,19 @@ The browser evidence records 134 arena objects, 133 meshes, four instanced meshe
 
 Each file below was compared with `cmp` against the original and re-hashed in this repository.
 
-| Asset | SHA-256 |
-|---|---|
-| `bow-audio/LICENSES.md` | `29136a39d03d3ca48a8cb578e3e86926b3706ebe11217edcce4725ca74dd5df5` |
-| `bow-audio/PROVENANCE.json` | `f26f763b9611cfc60f800dafb044e1d9f2446e98e813632b0272568a0830e547` |
-| `bow-audio/PROVENANCE.md` | `6c79c6dc801591c1f26baf7ecedce6fa6da469f1566f5adb6a814cdb1591d1fd` |
-| `bow-audio/processing-waveforms.png` | `52b0b89a2ea7370da42cc20ba1d6a170ddc24ae3da7310f6cb3fa86a24f3553b` |
-| `bow-audio/release-recorded.wav` | `2cc39db46946086deebd40cba00d5c4556812483a56eb28f0cc59fa093918ab2` |
-| `bow-audio/whizz-recorded.wav` | `b50eda446b72cecb6ecbd82c0007c9e344a3656fc925b7ccd2cd4dda24797951` |
-| `bow-survivor/LICENSE.CC0.md` | `f6089cba01cb570a24712b41ab8a586ccd3cc5ef53dc266ca50b95c288956d2c` |
-| `bow-survivor/PROVENANCE.md` | `76dcfcbd27f712c6603099821e8c8bfd85bc907ad5d34ac4d5fd629d08fc37be` |
-| `bow-survivor/eyes-brown.png` | `4659691c7295ad6206c78b003e5fd0e5f91dcd53032fa914a229bb48cabe424b` |
+| Asset                                 | SHA-256                                                            |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| `bow-audio/LICENSES.md`               | `29136a39d03d3ca48a8cb578e3e86926b3706ebe11217edcce4725ca74dd5df5` |
+| `bow-audio/PROVENANCE.json`           | `f26f763b9611cfc60f800dafb044e1d9f2446e98e813632b0272568a0830e547` |
+| `bow-audio/PROVENANCE.md`             | `6c79c6dc801591c1f26baf7ecedce6fa6da469f1566f5adb6a814cdb1591d1fd` |
+| `bow-audio/processing-waveforms.png`  | `52b0b89a2ea7370da42cc20ba1d6a170ddc24ae3da7310f6cb3fa86a24f3553b` |
+| `bow-audio/release-recorded.wav`      | `2cc39db46946086deebd40cba00d5c4556812483a56eb28f0cc59fa093918ab2` |
+| `bow-audio/whizz-recorded.wav`        | `b50eda446b72cecb6ecbd82c0007c9e344a3656fc925b7ccd2cd4dda24797951` |
+| `bow-survivor/LICENSE.CC0.md`         | `f6089cba01cb570a24712b41ab8a586ccd3cc5ef53dc266ca50b95c288956d2c` |
+| `bow-survivor/PROVENANCE.md`          | `76dcfcbd27f712c6603099821e8c8bfd85bc907ad5d34ac4d5fd629d08fc37be` |
+| `bow-survivor/eyes-brown.png`         | `4659691c7295ad6206c78b003e5fd0e5f91dcd53032fa914a229bb48cabe424b` |
 | `bow-survivor/male-adult-rigged.json` | `67d4d6fa8e134f0e703182954b817b99ff52f592225a3818b12613a44a1f1951` |
-| `bow-survivor/skin-male.png` | `03efe1f6b0ae52429649dcefc9dcaef6058032f874a251169cc3e2ed473c3874` |
+| `bow-survivor/skin-male.png`          | `03efe1f6b0ae52429649dcefc9dcaef6058032f874a251169cc3e2ed473c3874` |
 
 The provenance documents and processing image remain in the project but are not shipped by the hosted player because they are not runtime inputs. This also keeps historical source URLs out of `dist/`.
 
@@ -64,22 +64,22 @@ This repository now adds one deliberately narrow online mode around the standalo
 
 Every frame is JSON text with `v: 1`. State is sent at 20 Hz; ping runs every 20 seconds.
 
-| Direction | Message | Payload / behavior |
-|---|---|---|
-| client → server | `join` | `name`; changes the attachment-backed display name. |
-| client → server | `state` | `seq`, `pos`, `yaw`, `pitch`, `draw`, `anim`; relayed to peers. |
-| client → server | `shot` | `arrowId`, `origin`, `velocity`; peers spawn a visual-only ballistic arrow and trail. |
-| client → server | `hit` | `targetId`, `arrowId`, `damage`, `head`; relayed to the victim. |
-| client → server | `death` | `killerId`; the only message that changes the Durable Object kill tally. |
-| client → server | `ping` | `sentAt`; echoed as `pong` for RTT. |
-| server → client | `welcome` | `playerId`, ordered `roster` slots, `scores`, `scoreLimit: 20`, `round`. |
-| server → client | `join`, `leave` | Adds, renames, or removes a player slot. |
-| server → client | `state`, `shot`, `hit` | Relayed sender data with a server-supplied `playerId`. |
-| server → client | `death`, `scores` | Announces the victim/killer and the authoritative round kill map. |
-| server → client | `round_end` | `winnerId`, `scores` when a player reaches 20 kills. |
-| server → client | `round_reset` | New `round` after about five seconds; clients restore health, respawn, and clear arrows. |
-| server → client | `full` | Rejects an 11th connection; the client offers a solo-mode button. |
-| server → client | `pong` | Echoed `sentAt` used to display latency as RTT. |
+| Direction       | Message                | Payload / behavior                                                                       |
+| --------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
+| client → server | `join`                 | `name`; changes the attachment-backed display name.                                      |
+| client → server | `state`                | `seq`, `pos`, `yaw`, `pitch`, `draw`, `anim`; relayed to peers.                          |
+| client → server | `shot`                 | `arrowId`, `origin`, `velocity`; peers spawn a visual-only ballistic arrow and trail.    |
+| client → server | `hit`                  | `targetId`, `arrowId`, `damage`, `head`; relayed to the victim.                          |
+| client → server | `death`                | `killerId`; the only message that changes the Durable Object kill tally.                 |
+| client → server | `ping`                 | `sentAt`; echoed as `pong` for RTT.                                                      |
+| server → client | `welcome`              | `playerId`, ordered `roster` slots, `scores`, `scoreLimit: 20`, `round`.                 |
+| server → client | `join`, `leave`        | Adds, renames, or removes a player slot.                                                 |
+| server → client | `state`, `shot`, `hit` | Relayed sender data with a server-supplied `playerId`.                                   |
+| server → client | `death`, `scores`      | Announces the victim/killer and the authoritative round kill map.                        |
+| server → client | `round_end`            | `winnerId`, `scores` when a player reaches 20 kills.                                     |
+| server → client | `round_reset`          | New `round` after about five seconds; clients restore health, respawn, and clear arrows. |
+| server → client | `full`                 | Rejects an 11th connection; the client offers a solo-mode button.                        |
+| server → client | `pong`                 | Echoed `sentAt` used to display latency as RTT.                                          |
 
 ### Trust model and limits
 

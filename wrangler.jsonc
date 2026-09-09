@@ -10,17 +10,13 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "run_worker_first": ["/ws"],
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
   "durable_objects": {
-    "bindings": [
-      {"name": "BOW_ROOM", "class_name": "BowRoom"}
-    ]
+    "bindings": [{ "name": "BOW_ROOM", "class_name": "BowRoom" }],
   },
-  "migrations": [
-    {"tag": "v1", "new_sqlite_classes": ["BowRoom"]}
-  ],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BowRoom"] }],
   "observability": {
-    "enabled": true
-  }
+    "enabled": true,
+  },
 }

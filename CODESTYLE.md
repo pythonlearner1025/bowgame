@@ -8,7 +8,7 @@ default habits.
 
 Formatting is Prettier's job, not a matter of taste. The project uses a 100-character print
 width, two-space indentation, semicolons, single quotes, trailing commas, parentheses around
-arrow-function parameters, and spaces inside brackets. Run `npm run format` to rewrite files
+arrow-function parameters, and spaces inside object braces. Run `npm run format` to rewrite files
 and `npm run lint` to check them.
 
 ## Statements and control flow
