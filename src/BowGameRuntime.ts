@@ -53,6 +53,13 @@ import { BowCollision } from './BowCollision.js';
 import { batchBowScene } from './BowSceneBatch.js';
 import { BowAudio } from './BowAudio.js';
 import {
+  clearPlayerName,
+  randomPlayerName,
+  readPlayerName,
+  sanitizePlayerNameInput,
+  savePlayerName,
+} from './BowPlayerName.js';
+import {
   BOW_DRAW_SECONDS,
   GRAVITY,
   shotSpeed,
@@ -151,6 +158,18 @@ interface ArrowIntersection {
   isHead: boolean;
   hasCollided: boolean;
 }
+
+interface DeathFeedEntry {
+  killer: string;
+  victim: string;
+  expiresAtSeconds: number;
+}
+
+interface LeaderboardEntry {
+  name: string;
+  kills: number;
+  isLocal: boolean;
+}
 interface Bot {
   mesh: Group;
   name: string;
@@ -199,6 +218,15 @@ interface Arrow {
 }
 const MAT = (color: number, metalness = 0): MeshStandardMaterial =>
   new MeshStandardMaterial({ color, roughness: 0.85, metalness });
+
+// Death notices stay long enough to scan without becoming permanent HUD clutter.
+const DEATH_FEED_DURATION_SECONDS = 8;
+
+// Four recent events fit beneath the leaderboard at compact viewport heights.
+const MAX_DEATH_FEED_ENTRIES = 4;
+
+// Health below thirty-five percent changes to rust as an urgent survival cue.
+const LOW_HEALTH_THRESHOLD = 35;
 
 interface MeshOptions {
   x?: number;
@@ -467,6 +495,8 @@ export class BowGameRuntime {
   private messageUntil = 0;
   private active = false;
   private hadPointerLock = false;
+  private playerName = '';
+  private deathFeed: DeathFeedEntry[] = [];
   private sounds: BowAudio | null = null;
   private networkSnapshot: NetSnapshot | null = null;
   private networkUnsubscribe: (() => void) | null = null;
@@ -678,6 +708,7 @@ export class BowGameRuntime {
     this.overlay = null;
     this.hud = {};
     this.hudValues = Object.create(null);
+    this.deathFeed = [];
     this.collision?.dispose();
     this.collision = null;
     this.trails?.dispose();
@@ -741,6 +772,7 @@ export class BowGameRuntime {
    */
   getState(): Record<string, unknown> {
     return {
+      name: this.playerName || this.session?.getName() || null,
       collision: this.collision?.stats() ?? null,
       audio: this.sounds?.getState() ?? null,
       renderBatch: this.sceneBatch
@@ -1067,6 +1099,10 @@ export class BowGameRuntime {
     }
 
     if (message?.type === 'death') {
+      this.addDeath(
+        this.getNetworkPlayerName(message.killerId, snapshot),
+        this.getNetworkPlayerName(message.playerId, snapshot),
+      );
       const player = this.remotePlayers.get(message.playerId);
 
       if (player) {
@@ -1092,6 +1128,13 @@ export class BowGameRuntime {
     }
 
     this.updateHud();
+  }
+  private getNetworkPlayerName(playerId: string, snapshot: NetSnapshot): string {
+    if (playerId === snapshot.playerId) {
+      return 'YOU';
+    }
+
+    return snapshot.players.find((player) => player.id === playerId)?.name ?? 'ARCHER';
   }
   private applyNetworkHit(message: Extract<ServerMessage, { type: 'hit' }>) {
     const key = `${message.playerId}:${message.arrowId}`;
@@ -1122,6 +1165,7 @@ export class BowGameRuntime {
     this.messageUntil = this.elapsed + 3;
   }
   private resetOnlineRound() {
+    this.deathFeed = [];
     this.hp = 100;
     this.deadUntil = 0;
     this.winner = '';
@@ -1201,6 +1245,7 @@ export class BowGameRuntime {
     bot.human.applyPose?.(isRelaxed);
   }
   private restart() {
+    this.deathFeed = [];
     this.preview = null;
     if (!this.config) {
       return;
@@ -1355,14 +1400,14 @@ export class BowGameRuntime {
       this.restart();
     }
 
-    if (this.session) {
-      const input = this.hud.name as HTMLInputElement | undefined;
-      if (input) {
-        this.session.setName(input.value);
-      }
-      if (this.networkSnapshot?.status !== 'connected') {
-        return;
-      }
+    this.applyEnteredPlayerName();
+
+    if (this.session && this.networkSnapshot?.status !== 'connected') {
+      return;
+    }
+
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
     }
 
     const canvas = this.viewer.canvas;
@@ -1386,6 +1431,27 @@ export class BowGameRuntime {
       console.warn('Bow audio could not be resumed.', { error });
     });
   };
+  private applyEnteredPlayerName(): void {
+    const input = this.hud.name as HTMLInputElement | undefined;
+
+    if (!input) {
+      return;
+    }
+
+    const chosenName = sanitizePlayerNameInput(input.value);
+    const savedName = readPlayerName();
+
+    if (chosenName) {
+      this.playerName = savePlayerName(chosenName);
+    } else {
+      this.playerName = savedName ?? this.playerName ?? input.placeholder;
+    }
+
+    input.value = '';
+    input.placeholder = this.playerName;
+    this.session?.setName(this.playerName);
+    this.setHudStyle('clearName', 'display', readPlayerName() ? 'block' : 'none');
+  }
   private onMouseUp = (event: MouseEvent): void => {
     if (!this.running) {
       return;
@@ -2094,6 +2160,7 @@ export class BowGameRuntime {
         this.drawing = false;
         this.charge = 0;
         this.bots[owner].kills++;
+        this.addDeath(this.bots[owner].name, 'YOU');
         this.message = `${this.bots[owner].name} eliminated you`;
         this.messageUntil = this.elapsed + 3;
       }
@@ -2109,6 +2176,7 @@ export class BowGameRuntime {
         bot.respawn = this.elapsed + 3.5;
         bot.mesh.visible = false;
         this.kills++;
+        this.addDeath('YOU', bot.name);
         this.message = `${bot.name} eliminated  +1`;
       }
     }
@@ -2122,6 +2190,14 @@ export class BowGameRuntime {
     if (winningBot) {
       this.winner = winningBot.name;
     }
+  }
+  private addDeath(killer: string, victim: string): void {
+    this.deathFeed.unshift({
+      killer,
+      victim,
+      expiresAtSeconds: this.elapsed + DEATH_FEED_DURATION_SECONDS,
+    });
+    this.deathFeed.length = Math.min(this.deathFeed.length, MAX_DEATH_FEED_ENTRIES);
   }
   /**
    * Samples input-driven reference transitions using simulation time only.
@@ -2375,108 +2451,132 @@ export class BowGameRuntime {
     (this.hud[id] as HTMLButtonElement).disabled = value;
   }
 
-  private makeHud(): void {
-    this.hudValues = Object.create(null);
-    const overlay = document.createElement('div');
-    overlay.id = 'kite3d-bow-game-hud';
-    overlay.style.cssText =
-      'position:fixed;z-index:10000;pointer-events:none;color:#ecece3;font:13px system-ui,sans-serif;overflow:hidden;';
-    this.hud.overlay = overlay;
+  private setHudAttribute(id: string, attribute: string, value: string): void {
+    const key = `attribute:${id}:${attribute}`;
 
-    const add = (id: string, style: string, text = ''): HTMLDivElement => {
-      const element = document.createElement('div');
-      element.style.cssText = style;
-      element.textContent = text;
-      overlay.append(element);
-      this.hud[id] = element;
-      this.hudValues[`text:${id}`] = text;
+    if (this.hudValues[key] === value) {
+      return;
+    }
 
-      return element;
+    this.hudValues[key] = value;
+    this.hud[id].setAttribute(attribute, value);
+  }
+
+  private createHudElement(id: string, parent: HTMLElement, style = '', text = ''): HTMLDivElement {
+    const element = document.createElement('div');
+    element.dataset.hud = id;
+    element.style.cssText = style;
+    element.textContent = text;
+    parent.append(element);
+    this.hud[id] = element;
+    this.hudValues[`text:${id}`] = text;
+
+    return element;
+  }
+
+  private addHudStyles(overlay: HTMLElement): void {
+    const style = document.createElement('style');
+    style.textContent = `
+#kite3d-bow-game-hud{--edge:clamp(14px,2.2vw,28px);font-family:'Arial Narrow','Impact',sans-serif!important;color:#ddd6c5!important;text-shadow:0 1px 2px #000}
+#kite3d-bow-game-hud .plate{background-color:rgba(24,25,22,.88);background-image:repeating-linear-gradient(173deg,transparent 0 13px,#d0bb8a0b 14px,transparent 15px 28px),repeating-linear-gradient(91deg,transparent 0 47px,#0003 48px,transparent 49px 77px);border:1px solid #77705b50;box-shadow:0 2px 8px #0005}
+#kite3d-bow-game-hud .standings{position:absolute;right:var(--edge);top:var(--edge);width:clamp(180px,19vw,260px);max-width:calc(100% - 28px);border-top:2px solid #9b4b2b}
+#kite3d-bow-game-hud [data-hud=score]{padding:10px 12px 8px;font-size:13px;letter-spacing:1.5px;border-bottom:1px solid #b4a68430}
+#kite3d-bow-game-hud [data-hud=board]{padding:4px 0}
+#kite3d-bow-game-hud .score-row{display:flex;align-items:center;gap:12px;padding:5px 12px;font-size:14px;letter-spacing:1px}
+#kite3d-bow-game-hud .score-row.local{background:#d2c6a012;border-left:2px solid #a99d76;padding-left:10px;color:#eee6d2}
+#kite3d-bow-game-hud .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+#kite3d-bow-game-hud .tally{font-variant-numeric:tabular-nums}
+#kite3d-bow-game-hud [data-hud=feed]{display:grid;gap:4px;margin-top:9px}
+#kite3d-bow-game-hud .death-row{display:flex;gap:10px;padding:7px 10px;font-size:12px;letter-spacing:.5px;border-left:2px solid #76462f}
+#kite3d-bow-game-hud .death-row .victim{color:#cf9273;text-align:right}
+#kite3d-bow-game-hud [data-hud=health]{position:absolute;left:var(--edge);bottom:var(--edge);width:clamp(200px,26vw,360px);max-width:calc(100% - 28px);height:36px;display:flex;align-items:center;padding:0 12px;box-sizing:border-box;clip-path:polygon(0 3%,29% 0,30% 3%,98% 0,100% 90%,73% 100%,72% 96%,0 100%)}
+#kite3d-bow-game-hud .health-track{width:100%;height:18px;background:#0d100eb0;border:1px solid #8e8b6b33}
+#kite3d-bow-game-hud [data-hud=healthbar]{height:100%;background-color:var(--health-color,#788452);background-image:repeating-linear-gradient(176deg,transparent 0 4px,#242b253d 5px,transparent 6px 9px),repeating-linear-gradient(90deg,transparent 0 39px,#171d2440 40px);transition:width .18s ease-out}
+#kite3d-bow-game-hud [data-hud=hit]{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%) rotate(45deg);background:linear-gradient(#e3cf9e,#e3cf9e) center/100% 2px no-repeat,linear-gradient(#e3cf9e,#e3cf9e) center/2px 100% no-repeat}
+@media(max-height:500px){#kite3d-bow-game-hud .score-row{padding-top:2px;padding-bottom:2px}#kite3d-bow-game-hud .death-row{padding-top:3px;padding-bottom:3px}}
+@media(prefers-reduced-motion:reduce){#kite3d-bow-game-hud [data-hud=healthbar]{transition:none}}
+`;
+    overlay.append(style);
+  }
+
+  private makeStandingsHud(overlay: HTMLElement): void {
+    const standings = this.createHudElement('standings', overlay);
+    standings.className = 'standings';
+    const boardPlate = document.createElement('div');
+    boardPlate.className = 'plate';
+    standings.append(boardPlate);
+    boardPlate.append(
+      this.createHudElement('score', boardPlate),
+      this.createHudElement('board', boardPlate),
+    );
+    const feed = this.createHudElement('feed', standings);
+    feed.setAttribute('role', 'log');
+    feed.setAttribute('aria-label', 'Live death feed');
+  }
+
+  private makeHealthHud(overlay: HTMLElement): void {
+    const health = this.createHudElement('health', overlay);
+    health.className = 'plate';
+    health.setAttribute('role', 'progressbar');
+    health.setAttribute('aria-label', 'Health');
+    health.setAttribute('aria-valuemin', '0');
+    health.setAttribute('aria-valuemax', '100');
+    const track = document.createElement('div');
+    track.className = 'health-track';
+    health.append(track);
+    track.append(this.createHudElement('healthbar', track));
+  }
+
+  private makeNameField(modal: HTMLElement): void {
+    const storedName = readPlayerName();
+    this.playerName = storedName ?? this.session?.getName() ?? randomPlayerName();
+    const nameField = this.createHudElement(
+      'nameField',
+      modal,
+      'position:relative;margin:0 0 18px',
+    );
+    const input = document.createElement('input');
+    input.setAttribute('aria-label', 'Archer name');
+    input.name = 'username';
+    input.setAttribute('autocomplete', 'nickname');
+    input.maxLength = 24;
+    input.spellcheck = false;
+    input.placeholder = this.playerName;
+    input.style.cssText =
+      'box-sizing:border-box;display:block;width:100%;padding:11px 40px 11px 12px;background:#111713;color:#ecece3;border:1px solid #727564;text-align:center;font:700 13px system-ui,sans-serif;letter-spacing:1px';
+    nameField.append(input);
+    this.hud.name = input;
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.setAttribute('aria-label', 'Clear saved name');
+    clear.title = 'Clear saved name';
+    clear.textContent = '×';
+    clear.style.cssText = `display:${storedName ? 'block' : 'none'};position:absolute;right:1px;top:1px;bottom:1px;width:36px;border:0;background:transparent;color:#cf9273;font-size:22px;cursor:pointer`;
+    clear.onclick = () => this.clearSavedName(input);
+    nameField.append(clear);
+    this.hud.clearName = clear;
+    input.onkeydown = (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        (this.hud.button as HTMLButtonElement).click();
+      }
     };
+  }
 
-    add(
-      'brand',
-      'position:absolute;left:28px;top:24px;font-size:13px;letter-spacing:5px;font-weight:800;',
-      'TIMBER / ASH',
-    );
-    add(
-      'sub',
-      'position:absolute;left:29px;top:46px;font-size:10px;letter-spacing:2px;color:#c8c9b7;',
-      'BOW DEATHMATCH · LOCAL BOT ARENA',
-    );
-    add(
-      'score',
-      'position:absolute;top:24px;right:28px;text-align:right;font-size:15px;font-weight:700;',
-    );
-    add(
-      'board',
-      'position:absolute;right:28px;top:56px;line-height:23px;color:#d0d0c4;white-space:pre;text-align:right;font-size:11px;',
-    );
-    if (this.session) {
-      add(
-        'network',
-        'position:absolute;left:29px;top:65px;font-size:10px;letter-spacing:1.2px;color:#d6cfa8;',
-        'ONLINE · CONNECTING',
-      );
-    }
-    add(
-      'hit',
-      'position:absolute;left:50%;top:50%;font-size:32px;transform:translate(-50%,-50%);color:#ffdca1;',
-      '×',
-    );
-    add('health', 'position:absolute;left:28px;bottom:55px;font-size:31px;font-weight:700;');
-    add(
-      'healthbar',
-      'position:absolute;left:28px;bottom:45px;height:3px;background:#b8c89a;width:160px;',
-    );
-    add(
-      'ammo',
-      'position:absolute;right:28px;bottom:50px;text-align:right;font-size:12px;letter-spacing:2px;',
-      'FIELD BOW\n∞ ARROWS',
-    );
-    this.hud.ammo.style.whiteSpace = 'pre';
-    add(
-      'feed',
-      'position:absolute;left:0;right:0;top:59%;text-align:center;color:#ffdaa0;font-weight:700;letter-spacing:1px;',
-    );
-    add(
-      'help',
-      'position:absolute;bottom:17px;left:28px;right:28px;font-size:10px;color:#d8dacb;letter-spacing:.7px;',
-      'WASD MOVE     SHIFT SPRINT     SPACE JUMP     HOLD LMB DRAW / RELEASE FIRE     RMB AIM     R RESTART     M MUTE     ESC PAUSE',
-    );
-    add('damage', 'position:absolute;inset:0;box-shadow:inset 0 0 100px 30px #a02b22;opacity:0;');
-    const modal = add(
-      'modal',
-      'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,85%);background:rgba(22,27,23,.92);border:1px solid #727564;padding:32px;text-align:center;pointer-events:auto;box-shadow:0 20px 70px #0008;',
-    );
-    const title = document.createElement('div');
-    title.style.cssText = 'font-size:27px;font-weight:800;letter-spacing:5px;margin-bottom:12px';
-    title.textContent = 'TIMBER / ASH';
-    modal.append(title);
-    this.hud.title = title;
-    this.hudValues['text:title'] = 'TIMBER / ASH';
-    const description = document.createElement('div');
-    description.style.cssText =
-      'color:#bfc6b4;line-height:1.8;font-size:13px;white-space:pre-line;margin-bottom:24px';
-    modal.append(description);
-    this.hud.description = description;
+  private clearSavedName(input: HTMLInputElement): void {
+    clearPlayerName();
+    this.playerName = randomPlayerName();
+    input.value = '';
+    input.placeholder = this.playerName;
+    this.setHudStyle('clearName', 'display', 'none');
+    input.focus();
+  }
 
-    if (this.session) {
-      const input = document.createElement('input');
-      input.setAttribute('aria-label', 'Archer name');
-      input.maxLength = 24;
-      input.value = this.session.getName();
-      input.style.cssText =
-        'display:block;width:100%;margin:-6px 0 18px;padding:11px 12px;background:#111713;color:#ecece3;border:1px solid #727564;text-align:center;font:700 13px system-ui,sans-serif;letter-spacing:1px;outline:none';
-      modal.append(input);
-      this.hud.name = input;
-    }
-
+  private makeEntryButtons(modal: HTMLElement): void {
     const button = document.createElement('button');
     button.textContent = 'ENTER ARENA';
     button.style.cssText =
       'background:#bdc593;border:0;padding:13px 26px;color:#22291b;font-weight:800;letter-spacing:2px;cursor:pointer';
-
     button.onclick = () => {
       if (this.winner && !this.session) {
         this.restart();
@@ -2484,127 +2584,202 @@ export class BowGameRuntime {
 
       this.enter();
     };
-
     modal.append(button);
     this.hud.button = button;
     this.hudValues['text:button'] = 'ENTER ARENA';
 
     if (this.session) {
-      const solo = document.createElement('button');
-      solo.textContent = 'PLAY SOLO';
-      solo.style.cssText =
-        'display:none;margin:14px auto 0;background:transparent;border:1px solid #9da283;padding:10px 20px;color:#d8dacb;font-weight:700;letter-spacing:2px;cursor:pointer';
-
-      solo.onclick = () => {
-        const url = new URL(location.href);
-        url.searchParams.delete('online');
-        url.searchParams.set('solo', '1');
-        location.href = url.href;
-      };
-
-      modal.append(solo);
-      this.hud.solo = solo;
+      this.makeSoloButton(modal);
     }
+  }
 
-    (this.viewer.container ?? document.body).append(overlay);
+  private makeSoloButton(modal: HTMLElement): void {
+    const solo = document.createElement('button');
+    solo.textContent = 'PLAY SOLO';
+    solo.style.cssText =
+      'display:none;margin:14px auto 0;background:transparent;border:1px solid #9da283;padding:10px 20px;color:#d8dacb;font-weight:700;letter-spacing:2px;cursor:pointer';
+    solo.onclick = () => {
+      const url = new URL(location.href);
+      url.searchParams.delete('online');
+      url.searchParams.set('solo', '1');
+      location.href = url.href;
+    };
+    modal.append(solo);
+    this.hud.solo = solo;
+  }
+
+  private makeEntryModal(overlay: HTMLElement): void {
+    const modal = this.createHudElement(
+      'modal',
+      overlay,
+      'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,85%);background:rgba(24,25,22,.96);border:1px solid #6c5d45;border-top:2px solid #9b4b2b;padding:32px;text-align:center;pointer-events:auto;box-shadow:0 20px 70px #0008;',
+    );
+    const title = this.createHudElement(
+      'title',
+      modal,
+      'font-size:27px;font-weight:800;letter-spacing:5px;margin-bottom:12px',
+      'TIMBER / ASH',
+    );
+    title.removeAttribute('data-hud');
+    const description = this.createHudElement(
+      'description',
+      modal,
+      'color:#bfc6b4;line-height:1.8;font-size:13px;white-space:pre-line;margin-bottom:24px',
+    );
+    description.removeAttribute('data-hud');
+    this.makeNameField(modal);
+    this.makeEntryButtons(modal);
+  }
+
+  private makeHud(): void {
+    this.hudValues = Object.create(null);
+    const overlay = document.createElement('div');
+    overlay.id = 'kite3d-bow-game-hud';
+    overlay.style.cssText =
+      'position:fixed;z-index:10000;pointer-events:none;color:#ecece3;font:13px system-ui,sans-serif;overflow:hidden;';
+    this.hud.overlay = overlay;
     this.overlay = overlay;
+    this.addHudStyles(overlay);
+    this.makeStandingsHud(overlay);
+    const hit = this.createHudElement('hit', overlay);
+    hit.setAttribute('aria-hidden', 'true');
+    this.makeHealthHud(overlay);
+    this.createHudElement(
+      'damage',
+      overlay,
+      'position:absolute;inset:0;box-shadow:inset 0 0 100px 30px #a02b22;opacity:0;',
+    );
+    this.makeEntryModal(overlay);
+    (this.viewer.container ?? document.body).append(overlay);
     this.updateHud();
   }
-  private updateHud(): void {
-    if (!this.overlay) {
+
+  private getLeaderboardEntries(): LeaderboardEntry[] {
+    if (this.session) {
+      return (this.networkSnapshot?.players ?? []).map((player) => ({
+        name: player.local ? 'YOU' : player.name,
+        kills: this.networkSnapshot?.scores[player.id] ?? 0,
+        isLocal: player.local,
+      }));
+    }
+
+    return [
+      { name: 'YOU', kills: this.kills, isLocal: true },
+      ...this.bots.map((bot) => ({ name: bot.name, kills: bot.kills, isLocal: false })),
+    ];
+  }
+
+  private updateLeaderboard(): void {
+    const entries = this.getLeaderboardEntries();
+    entries.sort(
+      (left, right) =>
+        right.kills - left.kills ||
+        Number(right.isLocal) - Number(left.isLocal) ||
+        left.name.localeCompare(right.name),
+    );
+    const key = JSON.stringify(entries);
+
+    if (this.hudValues['content:board'] === key) {
       return;
     }
 
-    const rect = this.viewer.canvas.getBoundingClientRect();
-    this.setHudStyle('overlay', 'left', `${rect.left}px`);
-    this.setHudStyle('overlay', 'top', `${rect.top}px`);
-    this.setHudStyle('overlay', 'width', `${rect.width}px`);
-    this.setHudStyle('overlay', 'height', `${rect.height}px`);
-    const snapshot = this.networkSnapshot;
-    const isOnline = Boolean(this.session);
-    const limit = isOnline ? (snapshot?.scoreLimit ?? 20) : this.requiredConfig.scoreLimit;
-    this.setHudText('score', `${String(this.kills).padStart(2, '0')} / ${limit}  ELIMINATIONS`);
-    if (isOnline) {
-      const players = snapshot?.players ?? [];
-      this.setHudText(
-        'board',
-        [...players]
-          // The style guide explicitly permits `(a, b)` for numeric sorts.
-          // eslint-disable-next-line id-length
-          .sort((a, b) => a.slot - b.slot)
-          .map(
-            (player) =>
-              `${player.local ? 'YOU' : player.name}    ${snapshot?.scores[player.id] ?? 0} K / ${player.deaths} D`,
-          )
-          .join('\n'),
-      );
-      const latency =
-        snapshot?.latencyMs === null || snapshot?.latencyMs === undefined
-          ? ''
-          : ` · ${Math.round(snapshot.latencyMs)} MS RTT`;
-      this.setHudText(
-        'network',
-        `ONLINE · ${(snapshot?.status ?? 'connecting').toUpperCase()} · ${players.length}/${BOW_ROOM_CAP} PLAYERS${latency} · ROUND ${snapshot?.round ?? 1} · FIRST TO ${limit}`,
-      );
-    } else {
-      this.setHudText(
-        'board',
-        this.bots.map((bot) => `${bot.name}    ${bot.kills} K / ${bot.deaths} D`).join('\n'),
-      );
-    }
-    this.setHudText('health', `${this.hp}  HP`);
-    this.setHudStyle('healthbar', 'width', `${this.hp * 1.6}px`);
-    this.setHudStyle('healthbar', 'background', this.hp < 35 ? '#c9604c' : '#b8c89a');
-    this.setHudStyle('hit', 'opacity', String(this.hit));
-    this.setHudStyle('damage', 'opacity', String(this.flash * 0.6));
-    let feedText = '';
+    this.hudValues['content:board'] = key;
+    this.hud.board.replaceChildren();
 
-    if (this.hp <= 0) {
-      feedText = `YOU FELL · RESPAWNING IN ${Math.max(1, Math.ceil(this.deadUntil - this.elapsed))}`;
-    } else if (this.elapsed < this.messageUntil) {
-      feedText = this.message;
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      row.className = `score-row${entry.isLocal ? ' local' : ''}`;
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = entry.name;
+      const tally = document.createElement('span');
+      tally.className = 'tally';
+      tally.textContent = String(entry.kills).padStart(2, '0');
+      row.append(name, tally);
+      this.hud.board.append(row);
+    }
+  }
+
+  private updateDeathFeed(): void {
+    const activeEntries = this.deathFeed.filter((entry) => entry.expiresAtSeconds > this.elapsed);
+
+    if (activeEntries.length !== this.deathFeed.length) {
+      this.deathFeed = activeEntries;
     }
 
-    this.setHudText('feed', feedText);
+    const key = JSON.stringify(this.deathFeed);
 
-    if (!isOnline) {
-      const show = (!this.active || Boolean(this.winner)) && !this.preview;
-      this.setHudText(
-        'sub',
-        this.preview ? 'MODEL INSPECTION · R RETURN TO MATCH' : 'BOW DEATHMATCH · LOCAL BOT ARENA',
-      );
-      this.setHudStyle('modal', 'display', show ? 'block' : 'none');
-      let title = 'TIMBER / ASH';
-      let description = `${this.requiredConfig.botCount} hunters. First to ${this.requiredConfig.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`;
-
-      if (this.winner) {
-        title = this.winner === 'YOU' ? 'VICTORY' : 'MATCH OVER';
-        description = `${this.winner} reached ${this.requiredConfig.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths`;
-      }
-
-      let buttonText = 'ENTER ARENA';
-
-      if (this.winner) {
-        buttonText = 'PLAY AGAIN';
-      } else if (this.elapsed > 0) {
-        buttonText = 'RESUME HUNT';
-      }
-
-      this.setHudText('title', title);
-      this.setHudText('description', description);
-      this.setHudText('button', buttonText);
-
+    if (this.hudValues['content:feed'] === key) {
       return;
     }
 
-    const status = snapshot?.status ?? 'connecting';
-    const isBlocked =
-      status === 'full' ||
-      status === 'reconnecting' ||
-      status === 'disconnected' ||
-      status === 'connecting';
+    this.hudValues['content:feed'] = key;
+    this.hud.feed.replaceChildren();
+
+    for (const entry of this.deathFeed) {
+      const row = document.createElement('div');
+      row.className = 'death-row plate';
+      const killer = document.createElement('span');
+      killer.className = 'name';
+      killer.textContent = entry.killer;
+      const arrow = document.createElement('span');
+      arrow.textContent = '→';
+      const victim = document.createElement('span');
+      victim.className = 'name victim';
+      victim.textContent = entry.victim;
+      row.append(killer, arrow, victim);
+      this.hud.feed.append(row);
+    }
+  }
+
+  private updateSoloModal(): void {
+    const show = (!this.active || Boolean(this.winner)) && !this.preview;
+    this.setHudStyle('modal', 'display', show ? 'block' : 'none');
+    let title = 'TIMBER / ASH';
+    let description = `${this.requiredConfig.botCount} hunters. First to ${this.requiredConfig.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`;
+
+    if (this.winner) {
+      title = this.winner === 'YOU' ? 'VICTORY' : 'MATCH OVER';
+      description = `${this.winner} reached ${this.requiredConfig.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths`;
+    }
+
+    let buttonText = 'ENTER ARENA';
+
+    if (this.winner) {
+      buttonText = 'PLAY AGAIN';
+    } else if (this.elapsed > 0) {
+      buttonText = 'RESUME HUNT';
+    }
+
+    this.setHudText('title', title);
+    this.setHudText('description', description);
+    this.setHudText('button', buttonText);
+  }
+
+  private getOnlineModalDescription(status: NetSnapshot['status'], limit: number): string {
+    if (status === 'full') {
+      return `The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.`;
+    }
+
+    if (status === 'reconnecting' || status === 'disconnected') {
+      return 'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.';
+    }
+
+    if (status === 'connecting') {
+      return 'Connecting to the main room…';
+    }
+
+    if (this.winner) {
+      return `${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.`;
+    }
+
+    return `${this.networkSnapshot?.players.length ?? 0} archers online. First to ${limit} eliminations.\n\nHeadshots deal extra damage. Respawn is automatic.`;
+  }
+
+  private updateOnlineModal(limit: number): void {
+    const status = this.networkSnapshot?.status ?? 'connecting';
+    const isBlocked = ['full', 'reconnecting', 'disconnected', 'connecting'].includes(status);
     const show = !this.active || Boolean(this.winner) || isBlocked;
-    this.setHudText('sub', 'BOW DEATHMATCH · ONLINE · NO BOTS');
     this.setHudStyle('modal', 'display', show ? 'block' : 'none');
     let title = 'TIMBER / ASH';
 
@@ -2616,24 +2791,11 @@ export class BowGameRuntime {
       title = 'ROUND OVER';
     }
 
-    let description = `${snapshot?.players.length ?? 0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`;
-
-    if (status === 'full') {
-      description = `The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.`;
-    } else if (status === 'reconnecting' || status === 'disconnected') {
-      description =
-        'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.';
-    } else if (status === 'connecting') {
-      description = 'Connecting to the main room…';
-    } else if (this.winner) {
-      description = `${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.`;
-    }
-
     this.setHudText('title', title);
-    this.setHudText('description', description);
-    const disabled = isBlocked || Boolean(this.winner);
-    this.setHudDisabled('button', disabled);
-    this.setHudStyle('button', 'opacity', disabled ? '.55' : '1');
+    this.setHudText('description', this.getOnlineModalDescription(status, limit));
+    const isDisabled = isBlocked || Boolean(this.winner);
+    this.setHudDisabled('button', isDisabled);
+    this.setHudStyle('button', 'opacity', isDisabled ? '.55' : '1');
     let buttonText = 'ENTER ARENA';
 
     if (this.winner) {
@@ -2647,7 +2809,42 @@ export class BowGameRuntime {
     }
 
     this.setHudText('button', buttonText);
-    this.setHudStyle('name', 'display', this.winner || status === 'full' ? 'none' : 'block');
+    this.setHudStyle('nameField', 'display', this.winner || status === 'full' ? 'none' : 'block');
     this.setHudStyle('solo', 'display', isBlocked ? 'block' : 'none');
+  }
+
+  private updateHud(): void {
+    if (!this.overlay) {
+      return;
+    }
+
+    const rect = this.viewer.canvas.getBoundingClientRect();
+    this.setHudStyle('overlay', 'left', `${rect.left}px`);
+    this.setHudStyle('overlay', 'top', `${rect.top}px`);
+    this.setHudStyle('overlay', 'width', `${rect.width}px`);
+    this.setHudStyle('overlay', 'height', `${rect.height}px`);
+    const isOnline = Boolean(this.session);
+    const limit = isOnline
+      ? (this.networkSnapshot?.scoreLimit ?? 20)
+      : this.requiredConfig.scoreLimit;
+    this.setHudText('score', `${String(this.kills).padStart(2, '0')} / ${limit} ELIMINATIONS`);
+    this.updateLeaderboard();
+    const health = Math.max(0, Math.min(100, this.hp));
+    this.setHudAttribute('health', 'aria-valuenow', String(health));
+    this.setHudStyle('healthbar', 'width', `${health}%`);
+    this.setHudStyle(
+      'healthbar',
+      '--health-color',
+      health < LOW_HEALTH_THRESHOLD ? '#a14f37' : '#788452',
+    );
+    this.setHudStyle('hit', 'opacity', String(this.hit));
+    this.setHudStyle('damage', 'opacity', String(this.flash * 0.6));
+    this.updateDeathFeed();
+
+    if (isOnline) {
+      this.updateOnlineModal(limit);
+    } else {
+      this.updateSoloModal();
+    }
   }
 }

@@ -156,6 +156,10 @@ test('real draw/release handlers launch an arrow that hits a bot, awards kill, a
   assert.equal(game.kills, 1);
   assert.equal(game.winner, 'YOU');
   assert.equal(bot.mesh.visible, false);
+  assert.deepEqual(
+    game.deathFeed.map(({ killer, victim }) => ({ killer, victim })),
+    [{ killer: 'YOU', victim: 'ASH' }],
+  );
 });
 test('bot arrows damage the player, credit bot kills, and respawn without resetting score', () => {
   const { game } = harness();
@@ -174,6 +178,8 @@ test('bot arrows damage the player, credit bot kills, and respawn without resett
   assert.equal(game.hp, 0);
   assert.equal(game.deaths, 1);
   assert.equal(bot.kills, 1);
+  assert.equal(game.deathFeed[0].killer, 'ASH');
+  assert.equal(game.deathFeed[0].victim, 'YOU');
   game.elapsed = game.deadUntil;
   game.step(1 / 120);
   assert.equal(game.hp, 100);
@@ -182,6 +188,7 @@ test('bot arrows damage the player, credit bot kills, and respawn without resett
 });
 test('R clears score and old killfeed; blur cancels a drawn shot', () => {
   const { game, key, mouse } = harness();
+  game.addDeath('ASH', 'YOU');
   game.message = 'ASH eliminated you';
   game.messageUntil = 100;
   game.kills = 8;
@@ -196,6 +203,7 @@ test('R clears score and old killfeed; blur cancels a drawn shot', () => {
   assert.equal(game.hp, 100);
   assert.equal(game.message, '');
   assert.equal(game.messageUntil, 0);
+  assert.deepEqual(game.deathFeed, []);
   game.onMouseDown(mouse(0));
   game.step(0.2);
   assert.ok(game.charge > 0);
@@ -204,6 +212,35 @@ test('R clears score and old killfeed; blur cancels a drawn shot', () => {
   assert.equal(game.charge, 0);
   game.onMouseUp(mouse(0));
   assert.equal(game.arrows.length, 0);
+});
+
+test('Multiplayer deaths use display names and clear between rounds.', () => {
+  const { game } = harness();
+  game.syncRemotePlayers = () => {};
+  const snapshot = {
+    status: 'connected',
+    playerId: 'local',
+    scores: { local: 1 },
+    scoreLimit: 20,
+    round: 1,
+    winnerId: null,
+    latencyMs: null,
+    players: [
+      { id: 'local', local: true, name: 'Name', slot: 0, deaths: 0 },
+      { id: 'remote', local: false, name: 'ROOK', slot: 1, deaths: 1 },
+    ],
+  };
+
+  game.onNetwork({ type: 'death', playerId: 'remote', killerId: 'local' }, snapshot);
+  assert.deepEqual(
+    game.deathFeed.map(({ killer, victim }) => ({ killer, victim })),
+    [{ killer: 'YOU', victim: 'ROOK' }],
+  );
+  game.onNetwork({ type: 'death', playerId: 'local', killerId: 'remote' }, snapshot);
+  assert.equal(game.deathFeed[0].killer, 'ROOK');
+  assert.equal(game.deathFeed[0].victim, 'YOU');
+  game.resetOnlineRound();
+  assert.deepEqual(game.deathFeed, []);
 });
 
 test('bow draw and release keep the nock on the string, flex without geometry allocation, and recover', () => {

@@ -12,12 +12,12 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 40.89999985694885,
+        "buildMs": 41.89999985694885,
         "triangles": 89056,
         "solidMeshes": 129,
-        "steps": 392,
-        "meanStepMs": 0.008418364792454,
-        "maxStepMs": 0.20000004768371582
+        "steps": 504,
+        "meanStepMs": 0.0073412708819858615,
+        "maxStepMs": 0.10000014305114746
       },
       "spawns": [
         {
@@ -114,11 +114,11 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 40.89999985694885,
+        "buildMs": 41.89999985694885,
         "triangles": 89056,
         "solidMeshes": 129,
-        "steps": 1352,
-        "meanStepMs": 0.007766271131278495,
+        "steps": 1464,
+        "meanStepMs": 0.0077185800166729365,
         "maxStepMs": 0.20000004768371582
       },
       "spawns": [
@@ -216,11 +216,11 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 40.89999985694885,
+        "buildMs": 41.89999985694885,
         "triangles": 89056,
         "solidMeshes": 129,
-        "steps": 1680,
-        "meanStepMs": 0.0074404756228129065,
+        "steps": 1792,
+        "meanStepMs": 0.00775669701397419,
         "maxStepMs": 0.20000004768371582
       },
       "spawns": [
@@ -307,26 +307,22 @@
       ]
     },
     "landed": {
-      "rockDistance": 0.9583544741171376,
+      "rockDistance": null,
       "position": [
-        6.7,
-        0.950099988079071,
-        -3.9868448379739023
+        0,
+        -0.03989999910593034,
+        17
       ],
       "grounded": true,
       "penetration": 0,
-      "lastImpact": [
-        27.06801960766356,
-        -0.03999999910593016,
-        6.236561255905553
-      ],
-      "impactDistance": 5.0270550383173204e-15,
+      "lastImpact": null,
+      "impactDistance": null,
       "stats": {
-        "buildMs": 40.89999985694885,
+        "buildMs": 41.89999985694885,
         "triangles": 89056,
         "solidMeshes": 129,
-        "steps": 2320,
-        "meanStepMs": 0.00827586137015244,
+        "steps": 3352,
+        "meanStepMs": 0.01002386674676135,
         "maxStepMs": 0.20000004768371582
       },
       "spawns": [
@@ -429,11 +425,11 @@
         ],
         "impactDistance": 0,
         "stats": {
-          "buildMs": 40.89999985694885,
+          "buildMs": 41.89999985694885,
           "triangles": 89056,
           "solidMeshes": 129,
-          "steps": 2368,
-          "meanStepMs": 0.008319255870741766,
+          "steps": 3400,
+          "meanStepMs": 0.01000000042073867,
           "maxStepMs": 0.20000004768371582
         },
         "spawns": [
@@ -535,11 +531,11 @@
         ],
         "impactDistance": 0,
         "stats": {
-          "buildMs": 40.89999985694885,
+          "buildMs": 41.89999985694885,
           "triangles": 89056,
           "solidMeshes": 129,
-          "steps": 2416,
-          "meanStepMs": 0.008278145004581931,
+          "steps": 3448,
+          "meanStepMs": 0.010034803171445488,
           "maxStepMs": 0.20000004768371582
         },
         "spawns": [
@@ -629,7 +625,7 @@
   },
   "url": "http://127.0.0.1:43173/?collisionTest=1",
   "bots": 3,
-  "elapsed": 0.8,
+  "elapsed": 1.03,
   "before": [
     {
       "x": -14,
@@ -649,22 +645,22 @@
   ],
   "after": [
     {
-      "x": -14.620978557220267,
-      "y": -0.039899999105930346,
-      "z": -15.43906053575908
+      "x": -14.792322996085902,
+      "y": -0.03989999910593034,
+      "z": -14.979997174255447
     },
     {
-      "x": -1.170131390726714,
-      "y": -0.03989999910593031,
-      "z": -21.79460430180849
+      "x": -1.5044656929842726,
+      "y": -0.03989999910593035,
+      "z": -21.436387932128405
     },
     {
-      "x": 18.3267889014268,
-      "y": -0.03989999910593032,
-      "z": -5.850357125353519
+      "x": 17.84003642918823,
+      "y": -0.03989999910593033,
+      "z": -5.794061464376469
     }
   ],
-  "scoreText": "00 / 10  ELIMINATIONS",
+  "scoreText": "00 / 10 ELIMINATIONS",
   "renderBatch": {
     "originalMeshes": 91,
     "batches": 28
