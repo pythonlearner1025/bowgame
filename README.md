@@ -72,7 +72,10 @@ Run the deterministic scene check and the headless player smoke test with:
 ```sh
 npm run generate:scene
 npm run e2e
+npm run export:scene
 ```
+
+`npm run export:scene` writes the seeded arena to `evidence/bow-arena.gltf`, a self-contained glTF file for external viewers. It is not committed.
 
 Playwright is pinned to 1.62.1 because it matches cached Chromium revision 1234. `npm run e2e` uses software WebGL and writes [solo-arena.png](evidence/solo-arena.png) plus [e2e-run.json](evidence/e2e-run.json).
 

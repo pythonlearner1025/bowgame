@@ -10,6 +10,7 @@
     "compile:scripts": "tsc -p tsconfig.scripts.json && node tools/verify-scripts.mjs",
     "generate:scene": "node tools/generate-scene.mjs && node tools/verify-scene.mjs",
     "verify:assets": "node tools/verify-assets.mjs",
+    "export:scene": "node tools/export-scene-gltf.mjs",
     "typecheck:worker": "wrangler types && tsc -p tsconfig.worker.json",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",

@@ -383,3 +383,25 @@ test('spawn clearance rejects a thin canopy piercing the capsule axis', () => {
   assert.ok(candidate.penetration(spawn) < 0.001);
   candidate.dispose();
 });
+
+test('the boundary barrier stops player capsules at the 27-meter ring without acting as support', () => {
+  // High above every rock so only the barrier wall can touch the capsule.
+  const feet = new Vector3(26.9, 30, 0);
+  const velocity = new Vector3(4.5, 0, 0);
+
+  const isGrounded = world.resolve(feet, velocity);
+
+  assert.ok(feet.x <= 27 - 0.38 + 0.01, `feet stay inside the ring, x=${feet.x}`);
+  assert.ok(velocity.x <= 0.001, `outward velocity is removed, vx=${velocity.x}`);
+  assert.equal(isGrounded, false);
+  assert.ok(world.penetration(feet) < 0.01, 'capsule no longer penetrates the barrier');
+});
+
+test('arrows and sight lines pass through the boundary barrier', () => {
+  const hit = world.segment(new Vector3(0, 39.5, 0), new Vector3(40, 39.5, 0));
+
+  assert.equal(hit, null);
+  assert.equal(world.barrierTriangles, 192);
+  assert.equal(world.stats().barrierTriangles, 192);
+  assert.equal(world.solidMeshes, 129);
+});

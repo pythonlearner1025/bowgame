@@ -9,6 +9,13 @@
 /* eslint-disable no-magic-numbers */
 /* eslint-disable max-params -- Placement helpers mirror Three.js geometric primitives. */
 import { BoxGeometry, BufferGeometry, CanvasTexture, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, PlaneGeometry, RepeatWrapping, SRGBColorSpace, SphereGeometry, Vector3, } from 'threepipe';
+// The barrier ring matches the original 27-meter play area so the climbable outer boulders cannot
+// become an exit. It blocks player capsules only; arrows and sight lines ignore it.
+export const BOUNDARY_BARRIER_RADIUS_METERS = 27;
+// Forty meters exceeds any jump height reachable from the tallest interior surface.
+const BOUNDARY_BARRIER_HEIGHT_METERS = 40;
+// Ninety-six wall segments keep the ring within two centimeters of a true circle.
+const BOUNDARY_BARRIER_SEGMENTS = 96;
 /**
  * Builds the seeded local environment without making asset or network requests.
  *
@@ -347,6 +354,15 @@ export function buildBowArena() {
     }
     pebbles.receiveShadow = true;
     group.add(pebbles);
+    // The invisible boundary barrier is a thin open cylinder. It carries the player-barrier marker
+    // instead of the solid marker, so the collision system keeps it out of arrow and sight tests,
+    // and the scene batcher ignores it because it is not visible.
+    const barrier = new Mesh(new CylinderGeometry(BOUNDARY_BARRIER_RADIUS_METERS, BOUNDARY_BARRIER_RADIUS_METERS, BOUNDARY_BARRIER_HEIGHT_METERS, BOUNDARY_BARRIER_SEGMENTS, 1, true), new MeshStandardMaterial({ visible: false }));
+    barrier.name = 'Arena boundary barrier';
+    barrier.visible = false;
+    barrier.userData.bowPlayerBarrier = true;
+    barrier.position.set(0, BOUNDARY_BARRIER_HEIGHT_METERS / 2, 0);
+    group.add(barrier);
     return {
         group,
         obstacles,

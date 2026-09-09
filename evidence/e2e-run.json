@@ -12,12 +12,13 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 41.89999985694885,
+        "buildMs": 40.19999980926514,
         "triangles": 89056,
         "solidMeshes": 129,
+        "barrierTriangles": 192,
         "steps": 504,
-        "meanStepMs": 0.0073412708819858615,
-        "maxStepMs": 0.10000014305114746
+        "meanStepMs": 0.00952380895614624,
+        "maxStepMs": 0.20000004768371582
       },
       "spawns": [
         {
@@ -70,9 +71,9 @@
         },
         {
           "position": [
-            25,
+            24.646446609406727,
             -0.039899999105930326,
-            -10
+            -9.646446609406727
           ],
           "penetration": 0
         },
@@ -114,11 +115,12 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 41.89999985694885,
+        "buildMs": 40.19999980926514,
         "triangles": 89056,
         "solidMeshes": 129,
+        "barrierTriangles": 192,
         "steps": 1464,
-        "meanStepMs": 0.0077185800166729365,
+        "meanStepMs": 0.010724043097000957,
         "maxStepMs": 0.20000004768371582
       },
       "spawns": [
@@ -172,9 +174,9 @@
         },
         {
           "position": [
-            25,
+            24.646446609406727,
             -0.039899999105930326,
-            -10
+            -9.646446609406727
           ],
           "penetration": 0
         },
@@ -216,11 +218,12 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 41.89999985694885,
+        "buildMs": 40.19999980926514,
         "triangles": 89056,
         "solidMeshes": 129,
+        "barrierTriangles": 192,
         "steps": 1792,
-        "meanStepMs": 0.00775669701397419,
+        "meanStepMs": 0.010491071135870047,
         "maxStepMs": 0.20000004768371582
       },
       "spawns": [
@@ -274,9 +277,9 @@
         },
         {
           "position": [
-            25,
+            24.646446609406727,
             -0.039899999105930326,
-            -10
+            -9.646446609406727
           ],
           "penetration": 0
         },
@@ -318,11 +321,12 @@
       "lastImpact": null,
       "impactDistance": null,
       "stats": {
-        "buildMs": 41.89999985694885,
+        "buildMs": 40.19999980926514,
         "triangles": 89056,
         "solidMeshes": 129,
+        "barrierTriangles": 192,
         "steps": 3352,
-        "meanStepMs": 0.01002386674676135,
+        "meanStepMs": 0.012052505639401712,
         "maxStepMs": 0.20000004768371582
       },
       "spawns": [
@@ -376,9 +380,9 @@
         },
         {
           "position": [
-            25,
+            24.646446609406727,
             -0.039899999105930326,
-            -10
+            -9.646446609406727
           ],
           "penetration": 0
         },
@@ -425,11 +429,12 @@
         ],
         "impactDistance": 0,
         "stats": {
-          "buildMs": 41.89999985694885,
+          "buildMs": 40.19999980926514,
           "triangles": 89056,
           "solidMeshes": 129,
+          "barrierTriangles": 192,
           "steps": 3400,
-          "meanStepMs": 0.01000000042073867,
+          "meanStepMs": 0.01208823512582218,
           "maxStepMs": 0.20000004768371582
         },
         "spawns": [
@@ -483,9 +488,9 @@
           },
           {
             "position": [
-              25,
+              24.646446609406727,
               -0.039899999105930326,
-              -10
+              -9.646446609406727
             ],
             "penetration": 0
           },
@@ -531,11 +536,12 @@
         ],
         "impactDistance": 0,
         "stats": {
-          "buildMs": 41.89999985694885,
+          "buildMs": 40.19999980926514,
           "triangles": 89056,
           "solidMeshes": 129,
+          "barrierTriangles": 192,
           "steps": 3448,
-          "meanStepMs": 0.010034803171445488,
+          "meanStepMs": 0.01206496496211625,
           "maxStepMs": 0.20000004768371582
         },
         "spawns": [
@@ -589,9 +595,9 @@
           },
           {
             "position": [
-              25,
+              24.646446609406727,
               -0.039899999105930326,
-              -10
+              -9.646446609406727
             ],
             "penetration": 0
           },
@@ -666,8 +672,8 @@
     "batches": 28
   },
   "sceneStats": {
-    "objects": 134,
-    "meshes": 133,
+    "objects": 135,
+    "meshes": 134,
     "instancedMeshes": 4,
     "instances": {
       "Detailed pine needle boughs": 6720,
