@@ -1,0 +1,46 @@
+{
+  "mode": "live",
+  "baseURL": "https://bowgame.minjunesv0.workers.dev",
+  "roster": [
+    {
+      "id": "32139a34-90be-4352-8676-d6bce8234241",
+      "name": "Archer-A",
+      "slot": 0,
+      "local": true
+    },
+    {
+      "id": "a2258815-7b35-4632-b857-b030ecc0eef9",
+      "name": "Archer-B",
+      "slot": 1,
+      "local": false
+    }
+  ],
+  "remoteCounts": [
+    1,
+    1
+  ],
+  "scoresBefore": {
+    "32139a34-90be-4352-8676-d6bce8234241": 0,
+    "a2258815-7b35-4632-b857-b030ecc0eef9": 0
+  },
+  "scoresAfter": {
+    "a2258815-7b35-4632-b857-b030ecc0eef9": 0,
+    "32139a34-90be-4352-8676-d6bce8234241": 1
+  },
+  "victimHealthAfter": 0,
+  "latencyMs": 16.5,
+  "cap": {
+    "accepted": 10,
+    "eleventhRejected": true
+  },
+  "round": {
+    "winnerId": "ac7cb44d-54a6-40f6-9762-277c153d8a29",
+    "scores": {
+      "a7761a50-ec84-478c-93f7-ad3c27cc038b": 0,
+      "ac7cb44d-54a6-40f6-9762-277c153d8a29": 20
+    },
+    "resetRound": 2,
+    "resetDelayMs": 5020
+  },
+  "consoleErrors": []
+}

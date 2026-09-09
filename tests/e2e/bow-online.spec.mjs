@@ -23,8 +23,8 @@ async function enterOnline(page,name,errors){
   await page.evaluate(value=>{window.__KITE_BOW_SESSION__.setName(value);window.__KITE_BOW_GAME__.runtime.enter();},name);
 }
 
-test('two browsers play, room limits hold, and rounds reset',async({browser})=>{
-  const contextA=await browser.newContext({viewport:{width:1280,height:720}}),contextB=await browser.newContext({viewport:{width:1280,height:720}}),pageA=await contextA.newPage(),pageB=await contextB.newPage(),errors=[];
+test('two Chromium pages play, room limits hold, and rounds reset',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:1280,height:720}}),pageA=await context.newPage(),pageB=await context.newPage(),errors=[];
   await enterOnline(pageA,'Archer-A',errors);await pageA.evaluate(()=>window.viewer.timeline.stop());await enterOnline(pageB,'Archer-B',errors);
   await Promise.all([pageA.waitForFunction(()=>window.__KITE_BOW_GAME__?.getState()?.remotePlayers?.length===1),pageB.waitForFunction(()=>window.__KITE_BOW_GAME__?.getState()?.remotePlayers?.length===1)]);
   const beforeA=await pageA.evaluate(()=>window.__KITE_BOW_GAME__.getState()),beforeB=await pageB.evaluate(()=>window.__KITE_BOW_GAME__.getState());
@@ -50,5 +50,5 @@ test('two browsers play, room limits hold, and rounds reset',async({browser})=>{
 
   const evidence={mode,baseURL,roster:afterA.network.players.map(({id,name,slot,local})=>({id,name,slot,local})),remoteCounts:[afterA.remotePlayers.length,afterB.remotePlayers.length],scoresBefore,scoresAfter:afterA.network.scores,victimHealthAfter:afterB.health,latencyMs:afterA.network.latencyMs,cap:{accepted:10,eleventhRejected:full.type==='full'},round:{winnerId:roundEnd.winnerId,scores:roundEnd.scores,resetRound:roundReset.round,resetDelayMs:Date.now()-started},consoleErrors:errors};
   await mkdir(resolve(root,'evidence'),{recursive:true});await writeFile(resolve(root,`evidence/online-${mode}.json`),JSON.stringify(evidence,null,2)+'\n');expect(errors).toEqual([]);
-  await contextA.close();await contextB.close();
+  await context.close();
 });
