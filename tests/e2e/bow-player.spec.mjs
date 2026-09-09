@@ -140,7 +140,7 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   await page.keyboard.down('w');
   await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }));
   await page.keyboard.up('Space');
-  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.keys.delete('Space'));
+  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.state.keys.delete('Space'));
   const airborne = await page.evaluate(() =>
     window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 51 }),
   );
@@ -241,7 +241,7 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   expect(compactLayout.feedBottom).toBeLessThan(compactLayout.healthTop);
   await page.evaluate(() => {
     const game = window.__KITE_BOW_GAME__.runtime;
-    game.elapsed += 9;
+    game.state.elapsed += 9;
     game.updateHud();
   });
   await expect(hud.locator('.death-row')).toHaveCount(0);

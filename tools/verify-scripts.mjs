@@ -6,10 +6,13 @@ import { transform } from 'esbuild';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const entries = [
+  'ArrowSystem.js',
+  'BotSystem.js',
   'BowCollision.js',
   'BowArena.js',
   'BowArrowTrail.js',
   'BowAudio.js',
+  'BowController.js',
   'BowGameComponent.script.js',
   'BowGameRuntime.js',
   'BowHandPose.js',
@@ -21,6 +24,14 @@ const entries = [
   'BowReferenceClip.js',
   'BowSceneBatch.js',
   'BowVisuals.js',
+  'CombatRules.js',
+  'EntryOverlay.js',
+  'GameState.js',
+  'GameWorld.js',
+  'Hud.js',
+  'NetworkGlue.js',
+  'PlayerController.js',
+  'RemotePlayers.js',
 ];
 let imports = 0;
 
