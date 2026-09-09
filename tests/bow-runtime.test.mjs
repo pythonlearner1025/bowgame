@@ -6,11 +6,11 @@ import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {build} from 'esbuild';
 const bundled=await build({
-  stdin:{contents:`export {BowGameRuntime} from './src/utils/ai/BowGameRuntime.ts'; export {attachHumanAsset} from './src/utils/ai/BowHumanAsset.ts'; export {attachFirstPersonArm} from './src/utils/ai/BowHandRig.ts'; export {sampleReferenceAction,sampleReferenceTimeline,referenceArrow,referenceScreenPoint} from './src/utils/ai/BowReferenceClip.ts'; export {sampleBowPose,makeFieldBow,deformBow,bowNock,makeHuman,poseHuman,makeArm,poseArm,firstPersonSkin} from './src/utils/ai/BowVisuals.ts'; export {Group,Vector3,PerspectiveCamera,Quaternion} from 'threepipe';`,resolveDir:new URL('..',import.meta.url).pathname,loader:'ts'},
+  stdin:{contents:`export {BowGameRuntime} from './src/BowGameRuntime.ts'; export {attachHumanAsset} from './src/BowHumanAsset.ts'; export {attachFirstPersonArm} from './src/BowHandRig.ts'; export {sampleReferenceAction,sampleReferenceTimeline,referenceArrow,referenceScreenPoint} from './src/BowReferenceClip.ts'; export {sampleBowPose,makeFieldBow,deformBow,bowNock,makeHuman,poseHuman,makeArm,poseArm,firstPersonSkin} from './src/BowVisuals.ts'; export {Group,Vector3,PerspectiveCamera,Quaternion} from 'threepipe';`,resolveDir:new URL('..',import.meta.url).pathname,loader:'ts'},
   bundle:true,write:false,format:'esm',platform:'node',
   plugins:[{name:'runtime-harness',setup(b){
     // Keep real Three geometry/vectors, replace only the browser-only arena authoring factory.
-    b.onResolve({filter:/^threepipe$/},()=>({path:new URL('../../threepipe/node_modules/three/build/three.module.js',import.meta.url).pathname}));
+    b.onResolve({filter:/^threepipe$/},()=>({path:new URL('../node_modules/threepipe/node_modules/three/build/three.module.js',import.meta.url).pathname}));
     b.onResolve({filter:/BowArena\.ts$/},()=>({path:'arena',namespace:'stub'}));
     b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export function buildBowArena(){throw new Error("Not used in runtime tests");}',loader:'js'}));
   }}]
@@ -24,7 +24,7 @@ const {sampleReferenceAction,sampleReferenceTimeline,referenceArrow,referenceScr
 function harness(){
   const camera=new PerspectiveCamera(76,1,.1,200);camera.target=new Vector3();camera.controls={enabled:false};
   const canvas={};const viewer={canvas,scene:{mainCamera:camera,modelRoot:{userData:{kite3dBowGame:{}}}},setDirty(){}};
-  const game=new BowGameRuntime({get:()=>viewer,playMode:{isRunningMode:true,isPausedRunning:false}});
+  const game=new BowGameRuntime(viewer);
   game.config={version:1,kind:'bow-deathmatch',botCount:1,scoreLimit:1,difficulty:'normal',obstacles:[],playerSpawn:{x:0,y:0,z:0},botSpawns:[{x:0,y:0,z:-6}]};
   game.running=true;game.active=true;game.root=new Group();game.bow=makeFieldBow();game.root.add(game.bow,game.heldArrow,game.arm,game.hand);
   const key=code=>({code,target:null,repeat:false,preventDefault(){},stopImmediatePropagation(){}});
@@ -92,7 +92,7 @@ test('inspection rejects unsafe or unbounded values and never advances combat',(
 });
 
 test('bundled CC0 adult skin has normalized influences and remains finite in draw and walk poses',async()=>{
-  const asset=JSON.parse(await readFile(new URL('../public/assets/bow-survivor/male-adult-rigged.json',import.meta.url),'utf8'));
+  const asset=JSON.parse(await readFile(new URL('../assets/bow-survivor/male-adult-rigged.json',import.meta.url),'utf8'));
   assert.ok(asset.positions.length/3>14000);assert.ok(asset.indices.length/3>26000);
   for(let i=0;i<asset.skinWeight.length;i+=4){const sum=asset.skinWeight.slice(i,i+4).reduce((a,b)=>a+b,0);assert.ok(Math.abs(sum-1)<1e-5);}
   const human=makeHuman();assert.equal(attachHumanAsset(human,0,asset),true);
@@ -103,7 +103,7 @@ test('bundled CC0 adult skin has normalized influences and remains finite in dra
 
 
 test('first-person CC0 arm preserves textured skinning and its wrist follows grip through camera transforms',async()=>{
-  const asset=JSON.parse(await readFile(new URL('../public/assets/bow-survivor/male-adult-rigged.json',import.meta.url),'utf8'));
+  const asset=JSON.parse(await readFile(new URL('../assets/bow-survivor/male-adult-rigged.json',import.meta.url),'utf8'));
   for(const side of [-1,1]){
     const arm=makeArm(firstPersonSkin(),side);assert.equal(attachFirstPersonArm(arm,side,asset),true);
     const surface=arm.root.children.find(o=>o.isSkinnedMesh);assert.ok(surface.geometry.attributes.position.count>2000);assert.ok(surface.geometry.index.count>11000);
@@ -121,7 +121,7 @@ test('first-person CC0 arm preserves textured skinning and its wrist follows gri
 });
 
 test('right string fingers flex toward palm and open on release without reallocating arm geometry',async()=>{
-  const asset=JSON.parse(await readFile(new URL('../public/assets/bow-survivor/male-adult-rigged.json',import.meta.url),'utf8'));
+  const asset=JSON.parse(await readFile(new URL('../assets/bow-survivor/male-adult-rigged.json',import.meta.url),'utf8'));
   const arm=makeArm(firstPersonSkin(),1);attachFirstPersonArm(arm,1,asset);const surface=arm.root.children.find(o=>o.isSkinnedMesh),geometry=surface.geometry;
   const pose=()=>{poseArm(arm,new Vector3(.3,-.3,.8),new Vector3(.3,-.2,.35),new Vector3(),new Quaternion());arm.root.updateMatrixWorld(true);};
   const bone=name=>surface.skeleton.bones.find(b=>b.name===name+'.R');
@@ -159,7 +159,7 @@ test('the physical arrowhead is the full-draw sight and launches along its camer
   assert.ok(shaftEnd<=headBase&&shaftEnd>headBase-.02,'wooden shaft joins the physical arrowhead without a visible gap');
   for(const aspect of [16/9,2479/1537])for(const aim of [false,true]){
     const {game,mouse}=harness();game.bow=makeFieldBow();game.root.add(game.bow,game.heldArrow,game.arm,game.hand);
-    const camera=game.manager.get().scene.mainCamera;camera.aspect=aspect;game.inspect({draw:1,aim});game.root.updateMatrixWorld(true);camera.updateMatrixWorld(true);
+    const camera=game.viewer.scene.mainCamera;camera.aspect=aspect;game.inspect({draw:1,aim});game.root.updateMatrixWorld(true);camera.updateMatrixWorld(true);
     const head=game.heldArrow.localToWorld(new Vector3(0,0,-.765)),screen=head.clone().project(camera);
     assert.ok(Math.abs(screen.x)<1e-6&&Math.abs(screen.y)<1e-6,'rendered physical tip is screen center without an extra reticle');
     game.preview=null;game.charge=1;game.drawing=true;game.aimBlend=aim?1:0;game.onMouseUp(mouse(0));

@@ -1,5 +1,5 @@
 import {Bone,Matrix4,Vector3,Quaternion} from 'threepipe';
-import type {HumanAsset} from './BowHumanAsset.ts';
+import type {HumanAsset} from './BowHumanAsset.js';
 const v=(a:number[])=>new Vector3().fromArray(a);
 /** Match both the long axis and knuckle row; a direction-only rotation leaves arbitrary wrist roll. */
 export function handOrientation(data:HumanAsset,side:string,direction:Vector3,across:Vector3){

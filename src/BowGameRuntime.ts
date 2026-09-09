@@ -1,18 +1,15 @@
-import {Group, Mesh, CylinderGeometry, SphereGeometry, BoxGeometry, MeshStandardMaterial, Vector3, Quaternion, Color, FogExp2, HemisphereLight, DirectionalLight, BufferGeometry, TubeGeometry, CatmullRomCurve3, Line, LineBasicMaterial, IObject3D} from 'threepipe';
-import {makeFieldBow, deformBow, bowNock, makeHuman, poseHuman, makeArm, poseArm, sampleBowPose, firstPersonSkin, HumanRig, ArmRig} from './BowVisuals.ts';
-import {preloadHumanAsset, attachHumanAsset} from './BowHumanAsset.ts';
-import {attachFirstPersonArm} from './BowHandRig.ts';
-import {sampleReferenceAction,sampleReferenceTimeline,referenceScreenPoint,referenceRotation,referenceArrow,blendReferencePoses,BOW_RELEASE_SECONDS,type ReferencePose} from './BowReferenceClip.ts';
-import {BowArrowTrails,type ArrowTrailHandle} from './BowArrowTrail.ts';
-import {BowPerformance} from './BowPerformance.ts';
-import {batchBowScene} from './BowSceneBatch.ts';
-import {BowAudio} from './BowAudio.ts';
-import {ViewerInstanceManager} from '../ViewerInstanceManager.ts';
-import {buildBowArena} from './BowArena.ts';
-import {BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover, Cover} from './BowPhysics.ts';
+import {Group, Mesh, CylinderGeometry, SphereGeometry, BoxGeometry, MeshStandardMaterial, Vector3, Quaternion, Color, FogExp2, HemisphereLight, DirectionalLight, BufferGeometry, TubeGeometry, CatmullRomCurve3, Line, LineBasicMaterial, type ThreeViewer} from 'threepipe';
+import {makeFieldBow, deformBow, bowNock, makeHuman, poseHuman, makeArm, poseArm, sampleBowPose, firstPersonSkin, type HumanRig, type ArmRig} from './BowVisuals.js';
+import {preloadHumanAsset, attachHumanAsset} from './BowHumanAsset.js';
+import {attachFirstPersonArm} from './BowHandRig.js';
+import {sampleReferenceAction,sampleReferenceTimeline,referenceScreenPoint,referenceRotation,referenceArrow,blendReferencePoses,BOW_RELEASE_SECONDS,type ReferencePose} from './BowReferenceClip.js';
+import {BowArrowTrails,type ArrowTrailHandle} from './BowArrowTrail.js';
+import {BowPerformance} from './BowPerformance.js';
+import {batchBowScene} from './BowSceneBatch.js';
+import {BowAudio} from './BowAudio.js';
+import {BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover, type Cover} from './BowPhysics.js';
 
-export const BOW_GAME_CONFIG_KEY='kite3dBowGame';
-interface Config {version:1;kind:'bow-deathmatch';botCount:number;scoreLimit:number;difficulty:'easy'|'normal'|'hard';obstacles:Cover[];botSpawns:{x:number;y:number;z:number}[];playerSpawn:{x:number;y:number;z:number}}
+export interface BowGameConfig {version:1;kind:'bow-deathmatch';botCount:number;scoreLimit:number;difficulty:'easy'|'normal'|'hard';obstacles:Cover[];botSpawns:{x:number;y:number;z:number}[];playerSpawn:{x:number;y:number;z:number}}
 interface Bot {mesh:Group;name:string;hp:number;kills:number;deaths:number;cooldown:number;respawn:number;phase:number;draw:number;leftLeg:Group;rightLeg:Group;bow:Group;human:HumanRig;release:number;heldArrow:Group;walk?:number}
 interface Arrow {mesh:Group;position:Vector3;velocity:Vector3;owner:number;damage:number;age:number;stuck:boolean;trail:ArrowTrailHandle;whizzed?:boolean}
 const MAT=(color:number,metalness=0)=>new MeshStandardMaterial({color,roughness:0.85,metalness});
@@ -25,6 +22,7 @@ function disposeGroup(group:Group){const geoms=new Set<any>(),mats=new Set<any>(
 
 /** Declarative local API game. No supplied source code or remote assets are evaluated. */
 export class BowGameRuntime {
+    private lifecycle=0;
     private preview:{view:'first-person'|'character';draw:number;release:number;orbit:number;referenceTime?:number;aim?:boolean;flightSeconds?:number;flightSide?:boolean}|null=null;
     inspect(params:{view?:'first-person'|'character';draw?:number;release?:number;orbit?:number;referenceTime?:number;aim?:boolean;flightSeconds?:number;flightSide?:boolean;resume?:boolean}){
         if(!this.running)throw new Error('Start bow game play mode before inspecting it');
@@ -43,43 +41,28 @@ export class BowGameRuntime {
             for(let remaining=flightSeconds;remaining>1e-10;){const dt=Math.min(1/120,remaining);this.elapsed+=dt;this.stepArrows(dt);remaining-=dt;}
             this.preview.release=flightSeconds;
         }
-        this.updateCamera();this.updateHud();this.manager.get().setDirty();return this.getState();
+        this.updateCamera();this.updateHud();this.viewer.setDirty();return this.getState();
     }
-    private running=false; private config?:Config; private root=new Group(); private bots:Bot[]=[]; private arrows:Arrow[]=[];
+    private running=false; private config?:BowGameConfig; private root=new Group(); private bots:Bot[]=[]; private arrows:Arrow[]=[];
     private trails:BowArrowTrails|null=null; private performanceStats:BowPerformance|null=null; private sceneBatch:ReturnType<typeof batchBowScene>|null=null; private lastHudUpdate=-1;
     private player=new Vector3(); private velocity=new Vector3(); private hp=100; private kills=0; private deaths=0; private deadUntil=0; private elapsed=0; private winner='';
     private yaw=0; private pitch=0; private keys=new Set<string>(); private drawing=false; private charge=0; private recoil=0; private releaseTime=-1; private releasedCharge=0; private leftArm?:ArmRig; private rightArm?:ArmRig; private posePhase='ready'; private cooldown=0; private aiming=false; private aimBlend=0; private queuedDraw=false; private releaseFrom:ReferencePose|null=null; private cancelFrom:ReferencePose|null=null; private cancelTime=-1;
-    private frame:number|null=null; private last=0; private accumulator=0; private overlay:HTMLDivElement|null=null; private hud:Record<string,HTMLElement>={}; private bow=new Group(); private heldArrow=new Group(); private arm=new Group(); private hand=new Group();
+    private accumulator=0; private overlay:HTMLDivElement|null=null; private hud:Record<string,HTMLElement>={}; private bow=new Group(); private heldArrow=new Group(); private arm=new Group(); private hand=new Group();
     private cameraRestore:any; private sceneRestore:any; private hidden:{object:any;visible:boolean}[]=[]; private flash=0; private hit=0; private message=''; private messageUntil=0; private active=false; private sounds:BowAudio|null=null;
-    constructor(private manager:ViewerInstanceManager){}
-    isConfigured(){return !!this.manager.get()?.scene.modelRoot.userData?.[BOW_GAME_CONFIG_KEY];}
-    configure(params:{botCount?:number;scoreLimit?:number;difficulty?:string}) {
-        const count=params.botCount??3,limit=params.scoreLimit??10,difficulty=params.difficulty??'normal';
-        if(!Number.isInteger(count)||count<1||count>6)throw new Error('botCount must be an integer from 1 to 6');
-        if(!Number.isInteger(limit)||limit<1||limit>50)throw new Error('scoreLimit must be an integer from 1 to 50');
-        if(!['easy','normal','hard'].includes(difficulty))throw new Error('difficulty must be easy, normal, or hard');
-        this.stop();
-        const scene=this.manager.get().scene;
-        // Rebuild only this demo group; unrelated authored content remains untouched.
-        for(const child of [...scene.modelRoot.children])if(child.name==='K3D_BOW_DEMO_ARENA'){child.removeFromParent();}
-        const arena=buildBowArena();scene.addObject(arena.group as any);
-        const config:Config={version:1,kind:'bow-deathmatch',botCount:count,scoreLimit:limit,difficulty:difficulty as Config['difficulty'],obstacles:arena.obstacles,botSpawns:arena.botSpawns.map(p=>({x:p.x,y:p.y,z:p.z})),playerSpawn:{x:arena.playerSpawn.x,y:arena.playerSpawn.y,z:arena.playerSpawn.z}};
-        scene.modelRoot.userData[BOW_GAME_CONFIG_KEY]=config;
-        scene.modelRoot.userData.kite3dActiveGame='bow-deathmatch';
-        this.manager.loadedNeedsSave=true;this.manager.get().setDirty();
-        return {success:true,game:{kind:config.kind,botCount:count,scoreLimit:limit,difficulty},message:'Bow deathmatch configured. Save, then executeCommand play.'};
-    }
+    constructor(private viewer:ThreeViewer,config?:BowGameConfig,private arenaRoot?:Group,private isPaused:()=>boolean=()=>false,private ownsArena=false){this.config=config;}
+    isConfigured(){return !!this.config;}
     async start(){
-        this.stop();this.config=this.manager.get()?.scene.modelRoot.userData?.[BOW_GAME_CONFIG_KEY];if(!this.config)return this.getState();
+        if(this.running)this.stop();const lifecycle=++this.lifecycle;if(!this.config)return this.getState();
         await preloadHumanAsset();
-        const viewer=this.manager.get(),scene=viewer.scene,camera=scene.mainCamera;
+        if(lifecycle!==this.lifecycle)return this.getState();
+        const viewer=this.viewer,scene=viewer.scene,camera=scene.mainCamera;
         this.cameraRestore={position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:camera.target?.clone(),fov:(camera as any).fov,controls:camera.controls?.enabled};
         this.sceneRestore={background:scene.background,fog:scene.fog,renderScale:viewer.renderManager.renderScale};
         viewer.renderManager.renderScale=Math.min(viewer.renderManager.renderScale,1.1);
         scene.background=new Color(0xa5b3b4);scene.fog=new FogExp2(0xa5b3b4,.012);
         for(const object of scene.modelRoot.children)if(object.name!=='K3D_BOW_DEMO_ARENA'){this.hidden.push({object,visible:object.visible});object.visible=false;}
         this.root=new Group();this.root.name='K3D_BOW_RUNTIME';scene.add(this.root);
-        const arena=scene.modelRoot.children.find(object=>object.name==='K3D_BOW_DEMO_ARENA');if(arena)this.sceneBatch=batchBowScene(arena as Group,this.root);this.trails=new BowArrowTrails();this.root.add(this.trails.root);
+        const arena=this.arenaRoot??scene.modelRoot.children.find(object=>object.name==='K3D_BOW_DEMO_ARENA');if(arena)this.sceneBatch=batchBowScene(arena as Group,this.root);this.trails=new BowArrowTrails();this.root.add(this.trails.root);
         const sky=new HemisphereLight(0xd9e6ee,0x5b6040,1.15);this.root.add(sky);
         const sun=new DirectionalLight(0xffdeb0,3.3);sun.position.set(-16,28,12);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-34,right:34,top:34,bottom:-34,near:.5,far:95});sun.shadow.bias=-.0005;sun.shadow.normalBias=.04;this.root.add(sun);this.root.add(sun.target);
         this.bots=Array.from({length:this.config.botCount},(_,i)=>this.createBot(i));
@@ -89,19 +72,21 @@ export class BowGameRuntime {
         window.addEventListener('keydown',this.onKeyDown,true);window.addEventListener('keyup',this.onKeyUp,true);window.addEventListener('mousedown',this.onMouseDown,true);window.addEventListener('mouseup',this.onMouseUp,true);window.addEventListener('mousemove',this.onMouseMove,true);window.addEventListener('blur',this.onBlur);document.addEventListener('pointerlockchange',this.onLock);viewer.canvas.addEventListener('contextmenu',this.onContext);
         if(camera.controls)camera.controls.enabled=false;
         (camera as any).fov=76;(camera as any).updateProjectionMatrix?.();
-        this.performanceStats=new BowPerformance(viewer);this.last=performance.now();this.frame=requestAnimationFrame(this.tick);return this.getState();
+        this.performanceStats=new BowPerformance(viewer);return this.getState();
     }
     stop(){
-        if(this.frame!==null)cancelAnimationFrame(this.frame);this.frame=null;this.performanceStats?.dispose();this.performanceStats=null;
-        window.removeEventListener('keydown',this.onKeyDown,true);window.removeEventListener('keyup',this.onKeyUp,true);window.removeEventListener('mousedown',this.onMouseDown,true);window.removeEventListener('mouseup',this.onMouseUp,true);window.removeEventListener('mousemove',this.onMouseMove,true);window.removeEventListener('blur',this.onBlur);document.removeEventListener('pointerlockchange',this.onLock);this.manager.get()?.canvas.removeEventListener('contextmenu',this.onContext);
-        if(document.pointerLockElement===this.manager.get()?.canvas)document.exitPointerLock();
+        this.lifecycle++;
+        this.performanceStats?.dispose();this.performanceStats=null;
+        window.removeEventListener('keydown',this.onKeyDown,true);window.removeEventListener('keyup',this.onKeyUp,true);window.removeEventListener('mousedown',this.onMouseDown,true);window.removeEventListener('mouseup',this.onMouseUp,true);window.removeEventListener('mousemove',this.onMouseMove,true);window.removeEventListener('blur',this.onBlur);document.removeEventListener('pointerlockchange',this.onLock);this.viewer.canvas.removeEventListener('contextmenu',this.onContext);
+        if(document.pointerLockElement===this.viewer.canvas)document.exitPointerLock();
         this.keys.clear();this.preview=null;this.active=false;this.running=false;this.overlay?.remove();this.overlay=null;this.hud={};
         this.trails?.dispose();this.trails=null;this.sceneBatch?.dispose();this.sceneBatch=null;disposeGroup(this.root);this.arrows=[];this.bots=[];this.hidden.forEach(s=>s.object.visible=s.visible);this.hidden=[];
-        const viewer=this.manager.get();if(viewer&&this.cameraRestore){const c=viewer.scene.mainCamera,s=this.cameraRestore;c.position.copy(s.position);c.quaternion.copy(s.quaternion);if(s.target)c.target?.copy(s.target);if(c.controls)c.controls.enabled=s.controls;(c as any).fov=s.fov;(c as any).updateProjectionMatrix?.();this.cameraRestore=null;}
+        const viewer=this.viewer;if(viewer&&this.cameraRestore){const c=viewer.scene.mainCamera,s=this.cameraRestore;c.position.copy(s.position);c.quaternion.copy(s.quaternion);if(s.target)c.target?.copy(s.target);if(c.controls)c.controls.enabled=s.controls;(c as any).fov=s.fov;(c as any).updateProjectionMatrix?.();this.cameraRestore=null;}
         if(viewer&&this.sceneRestore){viewer.scene.background=this.sceneRestore.background;viewer.scene.fog=this.sceneRestore.fog;viewer.renderManager.renderScale=this.sceneRestore.renderScale;this.sceneRestore=null;viewer.setDirty();}
+        if(this.ownsArena&&this.arenaRoot){disposeGroup(this.arenaRoot);this.arenaRoot=undefined;}
         this.sounds?.dispose();this.sounds=null;return this.getState();
     }
-    getState(){return {audio:this.sounds?.getState()??null,renderBatch:this.sceneBatch?{originalMeshes:this.sceneBatch.originalMeshes,batches:this.sceneBatch.batches}:null,performance:this.performanceStats?.summary()??null,preview:this.preview,animation:{phase:this.posePhase,releaseSeconds:Number(this.releaseTime.toFixed(3))},kind:'bow-deathmatch',configured:this.isConfigured(),active:this.running,paused:!this.active||!!this.manager.playMode?.isPausedRunning,health:this.hp,kills:this.kills,deaths:this.deaths,scoreLimit:this.config?.scoreLimit??10,winner:this.winner,draw:Number(this.charge.toFixed(3)),arrowsInFlight:this.arrows.filter(a=>!a.stuck).length,elapsed:Number(this.elapsed.toFixed(2)),player:{position:{x:this.player.x,y:this.player.y,z:this.player.z},yaw:this.yaw,pitch:this.pitch,alive:this.hp>0},bots:this.bots.map(b=>({name:b.name,health:b.hp,kills:b.kills,deaths:b.deaths,alive:b.hp>0,position:{x:b.mesh.position.x,y:b.mesh.position.y,z:b.mesh.position.z},drawing:b.draw>0})),controls:'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause'};}
+    getState(){return {audio:this.sounds?.getState()??null,renderBatch:this.sceneBatch?{originalMeshes:this.sceneBatch.originalMeshes,batches:this.sceneBatch.batches}:null,performance:this.performanceStats?.summary()??null,preview:this.preview,animation:{phase:this.posePhase,releaseSeconds:Number(this.releaseTime.toFixed(3))},kind:'bow-deathmatch',configured:this.isConfigured(),active:this.running,paused:!this.active||this.isPaused(),health:this.hp,kills:this.kills,deaths:this.deaths,scoreLimit:this.config?.scoreLimit??10,winner:this.winner,draw:Number(this.charge.toFixed(3)),arrowsInFlight:this.arrows.filter(a=>!a.stuck).length,elapsed:Number(this.elapsed.toFixed(2)),player:{position:{x:this.player.x,y:this.player.y,z:this.player.z},yaw:this.yaw,pitch:this.pitch,alive:this.hp>0},bots:this.bots.map(b=>({name:b.name,health:b.hp,kills:b.kills,deaths:b.deaths,alive:b.hp>0,position:{x:b.mesh.position.x,y:b.mesh.position.y,z:b.mesh.position.z},drawing:b.draw>0})),controls:'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause'};}
     private createBot(i:number):Bot {
         const human=makeHuman(i);attachHumanAsset(human,i);const g=human.root;g.name=['ASH','ROOK','VALE','FLINT','MOSS','BEAR'][i];
         const bow=bowModel();bow.scale.setScalar(1);bow.position.set(-.22,1.56,-.60);g.add(bow);
@@ -123,8 +108,8 @@ export class BowGameRuntime {
     private onKeyDown=(e:KeyboardEvent)=>{if(!this.running||this.typing(e.target)||!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyR','KeyM'].includes(e.code))return;e.preventDefault();e.stopImmediatePropagation();if(e.code==='KeyR'&&!e.repeat)this.restart();else if(e.code==='KeyM'&&!e.repeat){if(this.sounds)this.sounds.setMuted(!this.sounds.isMuted());}else this.keys.add(e.code);};
     private onKeyUp=(e:KeyboardEvent)=>{if(this.keys.delete(e.code)){e.preventDefault();e.stopImmediatePropagation();}};
     private onContext=(e:Event)=>e.preventDefault();
-    private onMouseDown=(e:MouseEvent)=>{if(!this.running||e.target!==this.manager.get().canvas)return;e.preventDefault();e.stopImmediatePropagation();if(!this.active){this.enter();return;}if(e.button===0&&this.hp>0&&!this.winner){if(this.cooldown<=0&&this.cancelTime<0)this.drawing=true;else this.queuedDraw=true;}if(e.button===2)this.aiming=true;};
-    private enter=()=>{if(this.preview)this.restart();const canvas=this.manager.get().canvas;try{const pending=canvas.requestPointerLock();(pending as any)?.catch?.(()=>{this.message='Pointer lock unavailable — drag on canvas to aim';this.messageUntil=this.elapsed+8;});}catch{}this.active=true;this.sounds??=new BowAudio();this.sounds.resume().catch(()=>{});};
+    private onMouseDown=(e:MouseEvent)=>{if(!this.running||e.target!==this.viewer.canvas)return;e.preventDefault();e.stopImmediatePropagation();if(!this.active){this.enter();return;}if(e.button===0&&this.hp>0&&!this.winner){if(this.cooldown<=0&&this.cancelTime<0)this.drawing=true;else this.queuedDraw=true;}if(e.button===2)this.aiming=true;};
+    private enter=()=>{if(this.preview)this.restart();const canvas=this.viewer.canvas;try{const pending=canvas.requestPointerLock();(pending as any)?.catch?.(()=>{this.message='Pointer lock unavailable — drag on canvas to aim';this.messageUntil=this.elapsed+8;});}catch{}this.active=true;this.sounds??=new BowAudio();this.sounds.resume().catch(()=>{});};
     private onMouseUp=(e:MouseEvent)=>{
         if(!this.running)return;
         if(e.button===0){
@@ -140,29 +125,29 @@ export class BowGameRuntime {
         }
         if(e.button===2)this.aiming=false;
     };
-    private onMouseMove=(e:MouseEvent)=>{if(!this.running||!this.active)return;if(document.pointerLockElement!==this.manager.get().canvas&&!(e.buttons&1))return;this.yaw-=e.movementX*(this.aiming?.0011:.0018);this.pitch=Math.max(-1.25,Math.min(1.25,this.pitch-e.movementY*(this.aiming?.0011:.0018)));e.stopImmediatePropagation();};
+    private onMouseMove=(e:MouseEvent)=>{if(!this.running||!this.active)return;if(document.pointerLockElement!==this.viewer.canvas&&!(e.buttons&1))return;this.yaw-=e.movementX*(this.aiming?.0011:.0018);this.pitch=Math.max(-1.25,Math.min(1.25,this.pitch-e.movementY*(this.aiming?.0011:.0018)));e.stopImmediatePropagation();};
     private onBlur=()=>{this.keys.clear();if(this.drawing&&this.charge>0){this.cancelFrom=this.sampleLivePose();this.cancelTime=0;}this.drawing=false;this.charge=0;this.queuedDraw=false;this.aiming=false;this.active=false;this.sounds?.suspend();};
-    private onLock=()=>{if(document.pointerLockElement!==this.manager.get().canvas){this.onBlur();}else this.active=true;};
+    private onLock=()=>{if(document.pointerLockElement!==this.viewer.canvas){this.onBlur();}else this.active=true;};
 
     private firePlayer(pose:ReferencePose,charge:number){
         // The rendered arrowhead is the sight: launch from that same point along its camera ray.
-        this.updateCamera();const camera=this.manager.get().scene.mainCamera,tip=referenceArrow(pose).tip;
+        this.updateCamera();const camera=this.viewer.scene.mainCamera,tip=referenceArrow(pose).tip;
         const origin=tip.clone().applyQuaternion(camera.quaternion).add(camera.position);
         const direction=tip.clone().normalize().applyQuaternion(camera.quaternion);
         this.fire(origin,direction,-1,charge);
     }
     private fire(position:Vector3,direction:Vector3,owner:number,charge:number){this.sounds?.release(owner<0?undefined:position,owner);const model=arrowModel();model.position.copy(position);this.root.add(model);if(!this.trails){this.trails=new BowArrowTrails();this.root.add(this.trails.root);}const trail=this.trails.spawn(position,this.elapsed);this.arrows.push({mesh:model,position,velocity:direction.multiplyScalar(shotSpeed(charge)),owner,damage:shotDamage(charge),age:0,stuck:false,trail});if(this.arrows.length>90){const old=this.arrows.shift()!;this.trails.remove(old.trail);disposeGroup(old.mesh);}}
-    private tick=(time:number)=>{
-        if(!this.running)return;if(!this.manager.playMode?.isRunningMode){this.stop();return;}
-        const start=performance.now(),frameMs=time-this.last,dt=Math.min(frameMs/1000,.08);this.last=time;
-        const active=this.active&&!this.manager.playMode?.isPausedRunning&&!this.winner;
+    update(deltaTime:number,time=performance.now()){
+        if(!this.running)return false;
+        const start=performance.now(),frameMs=Math.max(0,deltaTime),dt=Math.min(frameMs/1000,.08);
+        const active=this.active&&!this.isPaused()&&!this.winner;
         if(active){this.accumulator+=dt;while(this.accumulator>=1/120){this.step(1/120);this.accumulator-=1/120;}}
         for(const bot of this.bots)if(bot.hp>0)this.updateBotPose(bot,bot.draw,bot.walk??0,false,bot.release);
         this.updateCamera();if(time-this.lastHudUpdate>33){this.updateHud();this.lastHudUpdate=time;this.sounds?.draw(-1,active&&this.hp>0&&this.drawing?this.charge:0);for(let i=0;i<this.bots.length;i++)this.sounds?.draw(i,active&&this.bots[i].hp>0?this.bots[i].draw:0,this.bots[i].mesh.position);}
-        this.manager.get().setDirty();
+        this.viewer.setDirty();
         this.performanceStats?.record(time,frameMs,performance.now()-start,active);
-        this.frame=requestAnimationFrame(this.tick);
-    };
+        return true;
+    }
     private step(dt:number){
         this.elapsed+=dt;
         this.aimBlend+=Math.max(-dt/.4,Math.min(dt/.4,Number(this.aiming)-this.aimBlend));
@@ -226,7 +211,7 @@ export class BowGameRuntime {
         }
         return sampleReferenceAction(this.charge,-1,this.aimBlend);
     }
-    private updateCamera(){if(!this.running)return;this.trails?.update(this.elapsed,this.manager.get().scene.mainCamera.position);if(this.preview?.view==='character'){const c=this.manager.get().scene.mainCamera,b=this.bots[0];this.bow.visible=this.arm.visible=this.hand.visible=this.heldArrow.visible=false;this.bots.forEach((v,i)=>v.mesh.visible=i===0);const angle=this.preview.orbit*Math.PI/180;b.mesh.position.set(0,0,17);b.mesh.rotation.set(0,0,0);b.leftLeg.rotation.set(0,0,0);b.rightLeg.rotation.set(0,0,0);this.updateBotPose(b,this.preview.draw,0,this.preview.draw===0&&this.preview.release<0,this.preview.release);c.position.set(Math.sin(angle)*3.15,.98,17-Math.cos(angle)*3.15);c.lookAt(0,.98,17);c.target?.set(0,.98,17);(c as any).fov=this.preview.draw>0||this.preview.release>=0?48:40;(c as any).updateProjectionMatrix?.();c.setDirty?.({change:'transform'});return;}if(this.preview)this.charge=this.preview.draw;const camera=this.manager.get().scene.mainCamera;if(camera.controls)camera.controls.enabled=false;const walk=this.keys.size>0&&this.hp>0&&this.active;camera.position.copy(this.player).add(new Vector3(0,this.hp>0?1.66: .55,0));if(walk)camera.position.y+=Math.sin(this.elapsed*10)*.025;camera.rotation.set(this.pitch,this.yaw,0,'YXZ');const dir=new Vector3(0,0,-1).applyQuaternion(camera.quaternion);camera.target?.copy(camera.position).add(dir);const wanted=76;(camera as any).fov=wanted;(camera as any).updateProjectionMatrix?.();camera.setDirty?.({change:'transform'});
+    private updateCamera(){if(!this.running)return;this.trails?.update(this.elapsed,this.viewer.scene.mainCamera.position);if(this.preview?.view==='character'){const c=this.viewer.scene.mainCamera,b=this.bots[0];this.bow.visible=this.arm.visible=this.hand.visible=this.heldArrow.visible=false;this.bots.forEach((v,i)=>v.mesh.visible=i===0);const angle=this.preview.orbit*Math.PI/180;b.mesh.position.set(0,0,17);b.mesh.rotation.set(0,0,0);b.leftLeg.rotation.set(0,0,0);b.rightLeg.rotation.set(0,0,0);this.updateBotPose(b,this.preview.draw,0,this.preview.draw===0&&this.preview.release<0,this.preview.release);c.position.set(Math.sin(angle)*3.15,.98,17-Math.cos(angle)*3.15);c.lookAt(0,.98,17);c.target?.set(0,.98,17);(c as any).fov=this.preview.draw>0||this.preview.release>=0?48:40;(c as any).updateProjectionMatrix?.();c.setDirty?.({change:'transform'});return;}if(this.preview)this.charge=this.preview.draw;const camera=this.viewer.scene.mainCamera;if(camera.controls)camera.controls.enabled=false;const walk=this.keys.size>0&&this.hp>0&&this.active;camera.position.copy(this.player).add(new Vector3(0,this.hp>0?1.66: .55,0));if(walk)camera.position.y+=Math.sin(this.elapsed*10)*.025;camera.rotation.set(this.pitch,this.yaw,0,'YXZ');const dir=new Vector3(0,0,-1).applyQuaternion(camera.quaternion);camera.target?.copy(camera.position).add(dir);const wanted=76;(camera as any).fov=wanted;(camera as any).updateProjectionMatrix?.();camera.setDirty?.({change:'transform'});
         this.sounds?.setListener(camera.position,new Vector3(1,0,0).applyQuaternion(camera.quaternion));
         const q=camera.quaternion,release=this.preview?.release??this.releaseTime;
         const pose=this.preview?.referenceTime!==undefined?sampleReferenceTimeline(this.preview.referenceTime):this.preview?sampleReferenceAction(this.preview.draw,release,(this.preview.aim??this.aiming)?1:0):this.sampleLivePose();this.posePhase=pose.phase;
@@ -267,9 +252,9 @@ export class BowGameRuntime {
         const modal=add('modal','position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,85%);background:rgba(22,27,23,.92);border:1px solid #727564;padding:32px;text-align:center;pointer-events:auto;box-shadow:0 20px 70px #0008;');
         const title=document.createElement('div');title.style.cssText='font-size:27px;font-weight:800;letter-spacing:5px;margin-bottom:12px';title.textContent='TIMBER / ASH';modal.append(title);this.hud.title=title;const description=document.createElement('div');description.style.cssText='color:#bfc6b4;line-height:1.8;font-size:13px;white-space:pre-line;margin-bottom:24px';modal.append(description);this.hud.description=description;
         const button=document.createElement('button');button.textContent='ENTER ARENA';button.style.cssText='background:#bdc593;border:0;padding:13px 26px;color:#22291b;font-weight:800;letter-spacing:2px;cursor:pointer';button.onclick=()=>{if(this.winner)this.restart();this.enter();};modal.append(button);this.hud.button=button;
-        document.body.append(overlay);this.overlay=overlay;this.updateHud();
+        (this.viewer.container??document.body).append(overlay);this.overlay=overlay;this.updateHud();
     }
-    private updateHud(){if(!this.overlay)return;const rect=this.manager.get().canvas.getBoundingClientRect();Object.assign(this.overlay.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${rect.width}px`,height:`${rect.height}px`});
+    private updateHud(){if(!this.overlay)return;const rect=this.viewer.canvas.getBoundingClientRect();Object.assign(this.overlay.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${rect.width}px`,height:`${rect.height}px`});
         this.hud.score.textContent=`${String(this.kills).padStart(2,'0')} / ${this.config!.scoreLimit}  ELIMINATIONS`;this.hud.board.textContent=this.bots.map(b=>`${b.name}    ${b.kills} K / ${b.deaths} D`).join('\n');this.hud.health.textContent=`${this.hp}  HP`;this.hud.healthbar.style.width=`${this.hp*1.6}px`;this.hud.healthbar.style.background=this.hp<35?'#c9604c':'#b8c89a';this.hud.hit.style.opacity=String(this.hit);this.hud.damage.style.opacity=String(this.flash*.6);this.hud.feed.textContent=this.hp<=0?`YOU FELL · RESPAWNING IN ${Math.max(1,Math.ceil(this.deadUntil-this.elapsed))}`:this.elapsed<this.messageUntil?this.message:'';
         const show=(!this.active||!!this.winner)&&!this.preview;this.hud.sub.textContent=this.preview?'MODEL INSPECTION · R RETURN TO MATCH':'BOW DEATHMATCH · LOCAL BOT ARENA';this.hud.modal.style.display=show?'block':'none';this.hud.title.textContent=this.winner?this.winner==='YOU'?'VICTORY':'MATCH OVER':'TIMBER / ASH';this.hud.description.textContent=this.winner?`${this.winner} reached ${this.config!.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths`:`${this.config!.botCount} hunters. First to ${this.config!.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`;this.hud.button.textContent=this.winner?'PLAY AGAIN':this.elapsed>0?'RESUME HUNT':'ENTER ARENA';
     }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {build} from 'esbuild';
-const bundled=await build({entryPoints:[new URL('../src/utils/ai/BowPhysics.ts',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'node'});
+const bundled=await build({entryPoints:[new URL('../src/BowPhysics.ts',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'node'});
 const {shotSpeed,shotDamage,segmentSphere,segmentCover,moveWithCover,GRAVITY}=await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 test('draw scales velocity and lethal headshots without unbounded charge',()=>{assert.equal(shotSpeed(0),18);assert.equal(shotSpeed(1),56);assert.equal(shotSpeed(2),56);assert.equal(shotDamage(1),70);assert.equal(shotDamage(1,true),126);});
 test('fast arrow swept collision hits a target between frame endpoints',()=>{const t=segmentSphere({x:0,y:1,z:0},{x:0,y:1,z:-12},{x:0,y:1,z:-6},.4);assert.ok(t>0&&t<1);assert.equal(segmentSphere({x:0,y:1,z:0},{x:0,y:1,z:-12},{x:2,y:1,z:-6},.4),null);});

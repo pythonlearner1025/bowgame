@@ -9,10 +9,10 @@ import {build} from 'esbuild';
 // Real runtime handlers, geometry, skeleton-target transforms, and clip sampler.
 // Only the unrelated browser arena authoring factory is replaced.
 const bundled=await build({
-  stdin:{contents:`export {BowGameRuntime} from './src/utils/ai/BowGameRuntime.ts'; export {sampleReferenceAction,sampleReferenceTimeline,referenceScreenPoint} from './src/utils/ai/BowReferenceClip.ts'; export {makeFieldBow,makeArm,firstPersonSkin} from './src/utils/ai/BowVisuals.ts'; export {Group,Vector3,PerspectiveCamera} from 'threepipe';`,resolveDir:new URL('..',import.meta.url).pathname,loader:'ts'},
+  stdin:{contents:`export {BowGameRuntime} from './src/BowGameRuntime.ts'; export {sampleReferenceAction,sampleReferenceTimeline,referenceScreenPoint} from './src/BowReferenceClip.ts'; export {makeFieldBow,makeArm,firstPersonSkin} from './src/BowVisuals.ts'; export {Group,Vector3,PerspectiveCamera} from 'threepipe';`,resolveDir:new URL('..',import.meta.url).pathname,loader:'ts'},
   bundle:true,write:false,format:'esm',platform:'node',
   plugins:[{name:'browser-independent-runtime',setup(b){
-    b.onResolve({filter:/^threepipe$/},()=>({path:new URL('../../threepipe/node_modules/three/build/three.module.js',import.meta.url).pathname}));
+    b.onResolve({filter:/^threepipe$/},()=>({path:new URL('../node_modules/threepipe/node_modules/three/build/three.module.js',import.meta.url).pathname}));
     b.onResolve({filter:/BowArena\.ts$/},()=>({path:'arena',namespace:'stub'}));
     b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export function buildBowArena(){throw new Error("Not used in transition tests");}',loader:'js'}));
   }}],
@@ -26,7 +26,7 @@ const {BowGameRuntime,sampleReferenceAction,sampleReferenceTimeline,referenceScr
 function harness(){
   const camera=new PerspectiveCamera(76,16/9,.1,200);camera.target=new Vector3();camera.controls={enabled:false};
   const canvas={},viewer={canvas,scene:{mainCamera:camera,modelRoot:{userData:{kite3dBowGame:{}}}},setDirty(){}};
-  const game=new BowGameRuntime({get:()=>viewer,playMode:{isRunningMode:true,isPausedRunning:false}});
+  const game=new BowGameRuntime(viewer);
   game.config={version:1,kind:'bow-deathmatch',botCount:1,scoreLimit:10,difficulty:'normal',obstacles:[],playerSpawn:{x:0,y:0,z:0},botSpawns:[{x:0,y:0,z:-6}]};
   game.running=true;game.active=true;game.root=new Group();game.bow=makeFieldBow();
   const skin=firstPersonSkin();game.leftArm=makeArm(skin,-1);game.rightArm=makeArm(skin,1);game.arm=game.leftArm.root;game.hand=game.rightArm.root;

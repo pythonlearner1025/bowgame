@@ -1,11 +1,11 @@
 import {Bone, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Group, MeshStandardMaterial, Skeleton, SkinnedMesh, Texture, TextureLoader, SRGBColorSpace, Vector3, Quaternion} from 'threepipe';
-import {handOrientation,poseHandFingers} from './BowHandPose.ts';
-import type {HumanRig} from './BowVisuals.ts';
+import {handOrientation,poseHandFingers} from './BowHandPose.js';
+import type {HumanRig} from './BowVisuals.js';
 export interface AssetBone {name:string;parent:number;position:number[];head:number[];tail:number[]}
 export interface HumanAsset {positions:number[];uvs:number[];indices:number[];skinIndex:number[];skinWeight:number[];bones:AssetBone[];eyes?:HumanAsset}
 let asset:HumanAsset|undefined,skinTexture:Texture|undefined,eyeTexture:Texture|undefined;
 let pending:Promise<void>|undefined;
-const base='/assets/bow-survivor/';
+const base='/kite/assets/bow-survivor/';
 export function getHumanArmSource(){return {asset,skinTexture};}
 /** Bundled CC0 anatomy is loaded once from this local editor, never a runtime third-party service. */
 export function preloadHumanAsset(){

@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {build} from 'esbuild';
-const bundled=await build({entryPoints:['src/utils/ai/BowAudio.ts'],bundle:true,write:false,format:'esm',platform:'node'});
+const bundled=await build({entryPoints:['src/BowAudio.ts'],bundle:true,write:false,format:'esm',platform:'node'});
 const temporary=await mkdtemp(join(tmpdir(),'kite3d-bow-audio-'));after(()=>rm(temporary,{recursive:true,force:true}));await writeFile(join(temporary,'audio.mjs'),bundled.outputFiles[0].text);
 const {BowAudio,renderBowSound,shouldArrowWhizz,BOW_AUDIO_VOICES,BOW_AUDIO_MIX,BOW_RECORDED_AUDIO,BOW_RECORDED_MIX}=await import(pathToFileURL(join(temporary,'audio.mjs')));
 const sounds=['draw','body','head','cover'];
@@ -15,9 +15,9 @@ test('original foley PCM is finite, bounded and head crack is stronger than body
  assert.ok(rms(renderBowSound('head'))>rms(renderBowSound('body'))*1.15,'headshot should be distinct and louder than body impact');assert.notDeepEqual(renderBowSound('head'),renderBowSound('cover'));
 });
 test('served recordings retain quiet PCM levels, faded edges and documented provenance',async()=>{
- const provenance=JSON.parse(await readFile('public/assets/bow-audio/PROVENANCE.json','utf8'));
+ const provenance=JSON.parse(await readFile('assets/bow-audio/PROVENANCE.json','utf8'));
  for(const kind of ['release','whizz']){
-  const bytes=await readFile('public'+BOW_RECORDED_AUDIO[kind]),view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);let start=0,length=0;
+  const bytes=await readFile(BOW_RECORDED_AUDIO[kind].replace('/kite/','')),view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);let start=0,length=0;
   for(let i=12;i+8<bytes.length;){const size=view.getUint32(i+4,true);if(bytes.toString('ascii',i,i+4)==='data'){start=i+8;length=size/2;break;}i+=8+size+(size%2);}
   assert.ok(start&&length);const pcm=Float32Array.from({length},(_,i)=>view.getInt16(start+i*2,true)/32768),peak=Math.max(...pcm.map(Math.abs));
   assert.ok(peak<(kind==='release'?.2:.05),'processed samples must not be normalized back to full scale');assert.ok(Math.abs(pcm[0])<.001&&Math.abs(pcm.at(-1))<.001,'edge fades remove cut clicks');
@@ -37,7 +37,7 @@ class Param {value=0;setTargetAtTime(v){this.value=v;}setValueAtTime(v){this.val
 class Node {gain=new Param();pan=new Param();playbackRate=new Param();threshold=new Param();knee=new Param();ratio=new Param();attack=new Param();release=new Param();connect(){}disconnect(){this.disconnected=true;}start(){}stop(time){this.stopTime=time;this.onended?.();}}
 let contexts=0,fetches=0,decodes=0,failDecode=false,deferDecode=false;
 const deferred=[];
-globalThis.fetch=async path=>{fetches++;const bytes=await readFile('public'+path);return {ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)};};
+globalThis.fetch=async path=>{fetches++;const bytes=await readFile(path.replace('/kite/',''));return {ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)};};
 function wavInfo(bytes){
  const view=new DataView(bytes);let channels=0,rate=0,bits=0,length=0;
  assert.equal(Buffer.from(bytes,0,4).toString(),'RIFF');

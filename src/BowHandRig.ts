@@ -1,7 +1,7 @@
 import {Bone, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, MeshStandardMaterial, Skeleton, SkinnedMesh, Vector3, Quaternion} from 'threepipe';
-import {getHumanArmSource, HumanAsset} from './BowHumanAsset.ts';
-import {handOrientation,poseHandFingers} from './BowHandPose.ts';
-import type {ArmRig} from './BowVisuals.ts';
+import {getHumanArmSource,type HumanAsset} from './BowHumanAsset.js';
+import {handOrientation,poseHandFingers} from './BowHandPose.js';
+import type {ArmRig} from './BowVisuals.js';
 const v=(a:number[])=>new Vector3().fromArray(a);
 const unit=(x:number,y:number,z:number)=>new Vector3(x,y,z).normalize();
 /** Reuse the CC0 human's continuous palm, nails, knuckles and forearm, preserving original skin UVs and weights. */

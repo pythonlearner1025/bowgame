@@ -3,7 +3,7 @@ export type BowSound='draw'|'release'|'flight'|'whizz'|'body'|'head'|'cover';
 export interface AudioPoint {x:number;y:number;z:number}
 export const BOW_AUDIO_VOICES=16;
 export const BOW_AUDIO_MIX={drawBase:.04,drawCharge:.13,drawFadeStart:.8,drawSilentCharge:.97,drawSmooth:.065,headWorldBoost:1.75,headWorldCap:1.28,headConfirm:1.04} as const;
-export const BOW_RECORDED_AUDIO={release:'/assets/bow-audio/release-recorded.wav',whizz:'/assets/bow-audio/whizz-recorded.wav'} as const;
+export const BOW_RECORDED_AUDIO={release:'/kite/assets/bow-audio/release-recorded.wav',whizz:'/kite/assets/bow-audio/whizz-recorded.wav'} as const;
 export const BOW_RECORDED_MIX={release:.8,whizz:.9} as const;
 type RecordedSound=keyof typeof BOW_RECORDED_AUDIO;
 const PROCEDURAL_SOUNDS:BowSound[]=['draw','body','head','cover'];
