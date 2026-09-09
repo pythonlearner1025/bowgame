@@ -14,7 +14,8 @@
     "test": "npm run compile:scripts && npm run typecheck:worker && npm run verify:assets && node --test tests/bow-*.test.mjs",
     "build": "npm run compile:scripts && node tools/verify-scene.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "e2e": "npm run build && playwright test --config tests/e2e/playwright.config.mjs"
+    "e2e": "npm run build && playwright test --config tests/e2e/playwright.config.mjs",
+    "e2e:online": "npm run build && node tests/e2e/run-online.mjs"
   },
   "keywords": [
     "3d",

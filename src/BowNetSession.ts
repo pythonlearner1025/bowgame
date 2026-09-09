@@ -27,12 +27,14 @@ export class BowNetSession {
     start(){if(!this.stopped)return;this.stopped=false;this.removeTransportListener=this.transport.onMessage(this.onTransport);this.tryConnect(false);}
     stop(){this.stopped=true;if(this.reconnectTimer!==null)window.clearTimeout(this.reconnectTimer);if(this.heartbeatTimer!==null)window.clearInterval(this.heartbeatTimer);this.reconnectTimer=this.heartbeatTimer=null;this.removeTransportListener?.();this.removeTransportListener=null;this.transport.close();this.setStatus('disconnected');}
     onChange(listener:SessionListener){this.listeners.add(listener);listener(null,this.snapshot());return()=>this.listeners.delete(listener);}
+    getName(){return this.name;}
     snapshot():NetSnapshot{return {status:this.status,playerId:this.playerId,players:[...this.players.values()].map(player=>({...player,pos:{...player.pos}})),scores:{...this.scores},scoreLimit:this.scoreLimit,round:this.round,winnerId:this.winnerId,latencyMs:this.latencyMs};}
     setName(name:string){this.name=cleanPlayerName(name);this.send({v:1,type:'join',name:this.name});}
     sendState(seq:number,pos:NetVector3,yaw:number,pitch:number,draw:number,anim:PlayerAnim){return this.send({v:1,type:'state',seq,pos,yaw,pitch,draw,anim});}
     sendShot(arrowId:string,origin:NetVector3,velocity:NetVector3){return this.send({v:1,type:'shot',arrowId,origin,velocity});}
     sendHit(targetId:string,arrowId:string,damage:number,head:boolean){return this.send({v:1,type:'hit',targetId,arrowId,damage,head});}
     sendDeath(killerId:string){return this.send({v:1,type:'death',killerId});}
+    ping(){return this.send({v:1,type:'ping',sentAt:performance.now()});}
 
     private send(message:ClientMessage){return this.transport.send(message);}
     private setStatus(status:ConnectionStatus){if(this.status===status)return;this.status=status;this.emit(null);}
@@ -69,7 +71,7 @@ export class BowNetSession {
                 break;
             }
             case'join':{
-                const existing=this.players.get(message.playerId);this.players.set(message.playerId,{id:message.playerId,name:message.name,slot:message.slot,local:message.playerId===this.playerId,seq:existing?.seq??-1,pos:existing?.pos??{x:0,y:0,z:0},yaw:existing?.yaw??0,pitch:existing?.pitch??0,draw:existing?.draw??0,anim:existing?.anim??'ready',deaths:existing?.deaths??0});break;
+                const existing=this.players.get(message.playerId);this.players.set(message.playerId,{id:message.playerId,name:message.name,slot:message.slot,local:message.playerId===this.playerId,seq:existing?.seq??-1,pos:existing?.pos??{x:0,y:0,z:0},yaw:existing?.yaw??0,pitch:existing?.pitch??0,draw:existing?.draw??0,anim:existing?.anim??'ready',deaths:existing?.deaths??0});this.scores[message.playerId]??=0;break;
             }
             case'state':{
                 const player=this.players.get(message.playerId);if(player&&message.seq>player.seq)Object.assign(player,{seq:message.seq,pos:{...message.pos},yaw:message.yaw,pitch:message.pitch,draw:message.draw,anim:message.anim});break;

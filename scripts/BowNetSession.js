@@ -28,12 +28,14 @@ export class BowNetSession {
         window.clearTimeout(this.reconnectTimer); if (this.heartbeatTimer !== null)
         window.clearInterval(this.heartbeatTimer); this.reconnectTimer = this.heartbeatTimer = null; this.removeTransportListener?.(); this.removeTransportListener = null; this.transport.close(); this.setStatus('disconnected'); }
     onChange(listener) { this.listeners.add(listener); listener(null, this.snapshot()); return () => this.listeners.delete(listener); }
+    getName() { return this.name; }
     snapshot() { return { status: this.status, playerId: this.playerId, players: [...this.players.values()].map(player => ({ ...player, pos: { ...player.pos } })), scores: { ...this.scores }, scoreLimit: this.scoreLimit, round: this.round, winnerId: this.winnerId, latencyMs: this.latencyMs }; }
     setName(name) { this.name = cleanPlayerName(name); this.send({ v: 1, type: 'join', name: this.name }); }
     sendState(seq, pos, yaw, pitch, draw, anim) { return this.send({ v: 1, type: 'state', seq, pos, yaw, pitch, draw, anim }); }
     sendShot(arrowId, origin, velocity) { return this.send({ v: 1, type: 'shot', arrowId, origin, velocity }); }
     sendHit(targetId, arrowId, damage, head) { return this.send({ v: 1, type: 'hit', targetId, arrowId, damage, head }); }
     sendDeath(killerId) { return this.send({ v: 1, type: 'death', killerId }); }
+    ping() { return this.send({ v: 1, type: 'ping', sentAt: performance.now() }); }
     send(message) { return this.transport.send(message); }
     setStatus(status) { if (this.status === status)
         return; this.status = status; this.emit(null); }
@@ -100,6 +102,7 @@ export class BowNetSession {
             case 'join': {
                 const existing = this.players.get(message.playerId);
                 this.players.set(message.playerId, { id: message.playerId, name: message.name, slot: message.slot, local: message.playerId === this.playerId, seq: existing?.seq ?? -1, pos: existing?.pos ?? { x: 0, y: 0, z: 0 }, yaw: existing?.yaw ?? 0, pitch: existing?.pitch ?? 0, draw: existing?.draw ?? 0, anim: existing?.anim ?? 'ready', deaths: existing?.deaths ?? 0 });
+                this.scores[message.playerId] ??= 0;
                 break;
             }
             case 'state': {

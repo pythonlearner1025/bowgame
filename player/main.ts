@@ -1,15 +1,26 @@
 import {EntityComponentPlugin,ThreeViewer} from 'threepipe';
 import {BowGameComponent} from '../scripts/BowGameComponent.script.js';
+import {BowNetSession} from '../scripts/BowNetSession.js';
+import {WebSocketTransport} from '../scripts/BowTransport.js';
 
 declare global {
   interface Window {
     viewer:ThreeViewer;
     __KITE_PLAYER__?:{viewer:ThreeViewer;ecp:EntityComponentPlugin;ready:boolean};
+    __KITE_BOW_SESSION__?:BowNetSession;
   }
 }
 
 const canvas=document.querySelector<HTMLCanvasElement>('#bow-canvas');
 if(!canvas)throw new Error('Bow player canvas is missing');
+
+const params=new URLSearchParams(location.search),online=params.get('solo')!=='1'&&(params.get('online')==='1'||location.hostname.endsWith('.workers.dev'));
+if(online){
+  const value=new Uint16Array(1);crypto.getRandomValues(value);const name=`Archer-${String(value[0]%10_000).padStart(4,'0')}`;
+  const scheme=location.protocol==='https:'?'wss':'ws',url=`${scheme}://${location.host}/ws?room=main&name=${encodeURIComponent(name)}`;
+  window.__KITE_BOW_SESSION__=new BowNetSession(new WebSocketTransport(url),name);
+}
+document.documentElement.dataset.playerMode=online?'online':'solo';
 
 async function start(){
   const ecp=new EntityComponentPlugin(false);

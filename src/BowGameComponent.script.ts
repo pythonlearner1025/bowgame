@@ -43,7 +43,7 @@ export class BowGameComponent extends Object3DComponent {
             botSpawns:arena.botSpawns.map(({x,y,z})=>({x,y,z})),
             playerSpawn:{x:arena.playerSpawn.x,y:arena.playerSpawn.y,z:arena.playerSpawn.z},
         };
-        const runtime=new BowGameRuntime(this.ctx.viewer,config,arena.group,()=>!this.ctx.ecp.running,true);
+        const runtime=new BowGameRuntime(this.ctx.viewer,config,arena.group,()=>!this.ctx.ecp.running,true,(window as any).__KITE_BOW_SESSION__??null);
         this.runtime=runtime;
         (window as any).__KITE_BOW_GAME__=this;
         void runtime.start().then(()=>{

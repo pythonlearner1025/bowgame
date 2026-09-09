@@ -1,0 +1,45 @@
+{
+  "mode": "local",
+  "baseURL": "http://127.0.0.1:60774",
+  "roster": [
+    {
+      "id": "5f3786e3-956d-4ad7-a78b-430f6460e066",
+      "name": "Archer-A",
+      "slot": 0,
+      "local": true
+    },
+    {
+      "id": "d0d58c01-34cc-4170-a12f-0fc3fc9ca475",
+      "name": "Archer-B",
+      "slot": 1,
+      "local": false
+    }
+  ],
+  "remoteCounts": [
+    1,
+    1
+  ],
+  "scoresBefore": {
+    "5f3786e3-956d-4ad7-a78b-430f6460e066": 0
+  },
+  "scoresAfter": {
+    "d0d58c01-34cc-4170-a12f-0fc3fc9ca475": 0,
+    "5f3786e3-956d-4ad7-a78b-430f6460e066": 1
+  },
+  "victimHealthAfter": 0,
+  "latencyMs": 0.40000009536743164,
+  "cap": {
+    "accepted": 10,
+    "eleventhRejected": true
+  },
+  "round": {
+    "winnerId": "dba9851b-38d4-4457-968b-999e6b04d07f",
+    "scores": {
+      "0e742bd1-afbe-42bf-9c4c-f1607491c312": 0,
+      "dba9851b-38d4-4457-968b-999e6b04d07f": 20
+    },
+    "resetRound": 2,
+    "resetDelayMs": 5012
+  },
+  "consoleErrors": []
+}
