@@ -78,6 +78,7 @@ export function buildBowArena(): {
         x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
         const mesh = new Mesh(geometry, material);
         mesh.name = name;
+        mesh.userData.bowSolid = true;
         mesh.position.set(x, y, z);
         mesh.scale.set(sx, sy, sz);
         mesh.castShadow = mesh.receiveShadow = true;
@@ -246,7 +247,7 @@ export function buildBowArena(): {
     obstacles.push({x: -9.7, z: -13, r: 1.65, height: 1.7});
     const log = add(new CylinderGeometry(0.34, 0.45, 5, 12), bark, 'Fallen pine', -13, 0.36, 13);
     log.rotation.set(0, 0.6, Math.PI / 2);
-    // Low decorative fallen timber intentionally stays traversable.
+    // Fallen timber is solid and supports parkour like its visible surface.
 
     // Instancing supplies dense ground detail with two draw calls.
     const blades = new BufferGeometry();

@@ -5,7 +5,7 @@ import {transform} from 'esbuild';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const entries=[
-  'BowArena.js','BowArrowTrail.js','BowAudio.js','BowGameComponent.script.js',
+  'BowCollision.js','BowArena.js','BowArrowTrail.js','BowAudio.js','BowGameComponent.script.js',
   'BowGameRuntime.js','BowHandPose.js','BowHandRig.js','BowHumanAsset.js',
   'BowPerformance.js','BowPhysics.js','BowReferenceClip.js','BowSceneBatch.js','BowVisuals.js',
 ];
@@ -18,10 +18,10 @@ for(const filename of entries){
   const specifiers=[...source.matchAll(/(?:from\s*|import\s*)['"]([^'"]+)['"]/g)].map(match=>match[1]);
   for(const specifier of specifiers){
     imports++;
-    if(specifier==='threepipe')continue;
+    if(['threepipe','three','three-mesh-bvh'].includes(specifier))continue;
     if(!/^\.\/.+\.js$/.test(specifier))throw new Error(`${filename}: unsupported import ${specifier}`);
     const imported=resolve(dirname(path),specifier);
     await stat(imported).catch(()=>{throw new Error(`${filename}: missing relative import ${relative(root,imported)}`);});
   }
 }
-console.log(`verified ${entries.length} raw ESM scripts (${imports} imports; only bare import: threepipe)`);
+console.log(`verified ${entries.length} raw ESM scripts (${imports} imports; allowed bare imports: threepipe, three, three-mesh-bvh)`);

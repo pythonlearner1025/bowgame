@@ -1,10 +1,11 @@
-import {Group, Mesh, CylinderGeometry, SphereGeometry, BoxGeometry, MeshStandardMaterial, Vector3, Quaternion, Color, FogExp2, HemisphereLight, DirectionalLight, BufferGeometry, TubeGeometry, CatmullRomCurve3, Line, LineBasicMaterial, type ThreeViewer} from 'threepipe';
+import {Triangle, Group, Mesh, CylinderGeometry, SphereGeometry, BoxGeometry, MeshStandardMaterial, Vector3, Quaternion, Color, FogExp2, HemisphereLight, DirectionalLight, BufferGeometry, TubeGeometry, CatmullRomCurve3, Line, LineBasicMaterial, type ThreeViewer} from 'threepipe';
 import {makeFieldBow, deformBow, bowNock, makeHuman, poseHuman, makeArm, poseArm, sampleBowPose, firstPersonSkin, type HumanRig, type ArmRig} from './BowVisuals.js';
 import {preloadHumanAsset, attachHumanAsset} from './BowHumanAsset.js';
 import {attachFirstPersonArm} from './BowHandRig.js';
 import {sampleReferenceAction,sampleReferenceTimeline,referenceScreenPoint,referenceRotation,referenceArrow,blendReferencePoses,BOW_RELEASE_SECONDS,type ReferencePose} from './BowReferenceClip.js';
 import {BowArrowTrails,type ArrowTrailHandle} from './BowArrowTrail.js';
 import type {BowPerformance} from './BowPerformance.js';
+import {BowCollision} from './BowCollision.js';
 import {batchBowScene} from './BowSceneBatch.js';
 import {BowAudio} from './BowAudio.js';
 import {BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover, type Cover} from './BowPhysics.js';
@@ -12,9 +13,9 @@ import {BowNetSession,type NetSnapshot} from './BowNetSession.js';
 import {BOW_ROOM_CAP,type PlayerAnim,type ServerMessage} from './BowProtocol.js';
 
 export interface BowGameConfig {version:1;kind:'bow-deathmatch';botCount:number;scoreLimit:number;difficulty:'easy'|'normal'|'hard';obstacles:Cover[];botSpawns:{x:number;y:number;z:number}[];playerSpawn:{x:number;y:number;z:number}}
-interface Bot {mesh:Group;name:string;hp:number;kills:number;deaths:number;cooldown:number;respawn:number;phase:number;draw:number;leftLeg:Group;rightLeg:Group;bow:Group;human:HumanRig;release:number;heldArrow:Group;walk?:number}
+interface Bot {mesh:Group;name:string;hp:number;kills:number;deaths:number;cooldown:number;respawn:number;phase:number;draw:number;leftLeg:Group;rightLeg:Group;bow:Group;human:HumanRig;release:number;heldArrow:Group;walk?:number;velocity?:Vector3;stuckTime?:number;stuckAnchor?:Vector3;escapeTarget?:Vector3}
 interface RemotePlayer extends Bot {id:string;slot:number;seq:number;target:Vector3;targetYaw:number;targetPitch:number;targetDraw:number;anim:PlayerAnim}
-interface Arrow {mesh:Group;position:Vector3;velocity:Vector3;owner:number;damage:number;age:number;stuck:boolean;trail:ArrowTrailHandle;arrowId?:string;visualOnly?:boolean;whizzed?:boolean}
+interface Arrow {mesh:Group;position:Vector3;velocity:Vector3;owner:number;damage:number;age:number;stuck:boolean;trail:ArrowTrailHandle;arrowId?:string;visualOnly?:boolean;sourcePlayerId?:string;whizzed?:boolean}
 const MAT=(color:number,metalness=0)=>new MeshStandardMaterial({color,roughness:0.85,metalness});
 function mesh(geometry:any,material:any,parent:Group,x=0,y=0,z=0){const m=new Mesh(geometry,material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
 function stick(parent:Group,a:Vector3,b:Vector3,r:number,material:any){const m=mesh(new CylinderGeometry(r,r,a.distanceTo(b),8),material,parent);m.position.copy(a).add(b).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new Vector3(0,1,0),b.clone().sub(a).normalize());return m;}
@@ -27,6 +28,10 @@ function disposeArena(group:Group){const textures=new Set<any>();group.traverse(
 /** Declarative local API game. No supplied source code or remote assets are evaluated. */
 export class BowGameRuntime {
     private lifecycle=0;
+    private collision:BowCollision|null=null;
+    private grounded=false;
+    private testClockPaused=false;
+    private lastWorldImpact:Vector3|null=null;
     private preview:{view:'first-person'|'character';draw:number;release:number;orbit:number;referenceTime?:number;aim?:boolean;flightSeconds?:number;flightSide?:boolean}|null=null;
     inspect(params:{view?:'first-person'|'character';draw?:number;release?:number;orbit?:number;referenceTime?:number;aim?:boolean;flightSeconds?:number;flightSide?:boolean;resume?:boolean}){
         if(!this.running)throw new Error('Start bow game play mode before inspecting it');
@@ -67,7 +72,7 @@ export class BowGameRuntime {
         scene.background=new Color(0xa5b3b4);scene.fog=new FogExp2(0xa5b3b4,.012);
         for(const object of scene.modelRoot.children)if(object.name!=='K3D_BOW_DEMO_ARENA'){this.hidden.push({object,visible:object.visible});object.visible=false;}
         this.root=new Group();this.root.name='K3D_BOW_RUNTIME';scene.add(this.root);
-        const arena=this.arenaRoot??scene.modelRoot.children.find(object=>object.name==='K3D_BOW_DEMO_ARENA');if(arena)this.sceneBatch=batchBowScene(arena as Group,this.root);this.trails=new BowArrowTrails();this.root.add(this.trails.root);
+        const arena=this.arenaRoot??scene.modelRoot.children.find(object=>object.name==='K3D_BOW_DEMO_ARENA');if(arena){this.collision=new BowCollision(arena as Group);this.config.playerSpawn=this.collision.spawn(new Vector3().copy(this.config.playerSpawn));this.config.botSpawns=this.config.botSpawns.map(p=>this.collision!.spawn(new Vector3().copy(p),.42));this.sceneBatch=batchBowScene(arena as Group,this.root);}this.trails=new BowArrowTrails();this.root.add(this.trails.root);
         const sky=new HemisphereLight(0xd9e6ee,0x5b6040,1.15);this.root.add(sky);
         const sun=new DirectionalLight(0xffdeb0,3.3);sun.position.set(-16,28,12);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-34,right:34,top:34,bottom:-34,near:.5,far:95});sun.shadow.bias=-.0005;sun.shadow.normalBias=.04;this.root.add(sun);this.root.add(sun.target);
         // Bots are intentionally absent online: remote rigs occupy the same gameplay
@@ -89,13 +94,28 @@ export class BowGameRuntime {
         window.removeEventListener('keydown',this.onKeyDown,true);window.removeEventListener('keyup',this.onKeyUp,true);window.removeEventListener('mousedown',this.onMouseDown,true);window.removeEventListener('mouseup',this.onMouseUp,true);window.removeEventListener('mousemove',this.onMouseMove,true);window.removeEventListener('blur',this.onBlur);document.removeEventListener('pointerlockchange',this.onLock);this.viewer.canvas.removeEventListener('contextmenu',this.onContext);
         if(document.pointerLockElement===this.viewer.canvas)document.exitPointerLock();
         this.keys.clear();this.preview=null;this.active=false;this.hadPointerLock=false;this.running=false;this.overlay?.remove();this.overlay=null;this.hud={};this.hudValues=Object.create(null);
-        this.trails?.dispose();this.trails=null;this.sceneBatch?.dispose();this.sceneBatch=null;disposeGroup(this.root);this.arrows=[];this.bots=[];this.hidden.forEach(s=>s.object.visible=s.visible);this.hidden=[];
+        this.collision?.dispose();this.collision=null;this.trails?.dispose();this.trails=null;this.sceneBatch?.dispose();this.sceneBatch=null;disposeGroup(this.root);this.arrows=[];this.bots=[];this.hidden.forEach(s=>s.object.visible=s.visible);this.hidden=[];
         const viewer=this.viewer;if(viewer&&this.cameraRestore){const c=viewer.scene.mainCamera,s=this.cameraRestore;c.position.copy(s.position);c.quaternion.copy(s.quaternion);if(s.target)c.target?.copy(s.target);if(c.controls)c.controls.enabled=s.controls;(c as any).fov=s.fov;(c as any).updateProjectionMatrix?.();this.cameraRestore=null;}
         if(viewer&&this.sceneRestore){viewer.scene.background=this.sceneRestore.background;viewer.scene.fog=this.sceneRestore.fog;viewer.renderManager.renderScale=this.sceneRestore.renderScale;this.sceneRestore=null;viewer.setDirty();}
         if(this.ownsArena&&this.arenaRoot){disposeArena(this.arenaRoot);this.arenaRoot=undefined;}
         this.sounds?.dispose();this.sounds=null;return this.getState();
     }
-    getState(){return {audio:this.sounds?.getState()??null,renderBatch:this.sceneBatch?{originalMeshes:this.sceneBatch.originalMeshes,batches:this.sceneBatch.batches}:null,performance:this.performanceStats?.summary()??null,preview:this.preview,animation:{phase:this.posePhase,releaseSeconds:Number(this.releaseTime.toFixed(3))},kind:'bow-deathmatch',mode:this.session?'online':'solo',configured:this.isConfigured(),active:this.running,paused:!this.active||this.isPaused(),health:this.hp,kills:this.kills,deaths:this.deaths,scoreLimit:this.session?this.networkSnapshot?.scoreLimit??20:this.config?.scoreLimit??10,winner:this.winner,draw:Number(this.charge.toFixed(3)),arrowsInFlight:this.arrows.filter(a=>!a.stuck).length,elapsed:Number(this.elapsed.toFixed(2)),player:{id:this.networkSnapshot?.playerId??null,position:{x:this.player.x,y:this.player.y,z:this.player.z},yaw:this.yaw,pitch:this.pitch,alive:this.hp>0},bots:this.bots.map(b=>({name:b.name,health:b.hp,kills:b.kills,deaths:b.deaths,alive:b.hp>0,position:{x:b.mesh.position.x,y:b.mesh.position.y,z:b.mesh.position.z},drawing:b.draw>0})),remotePlayers:[...this.remotePlayers.values()].map(player=>({id:player.id,name:player.name,slot:player.slot,alive:player.hp>0,position:{x:player.mesh.position.x,y:player.mesh.position.y,z:player.mesh.position.z},drawing:player.draw>0})),network:this.networkSnapshot,controls:'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause'};}
+    getState(){return {collision:this.collision?.stats()??null,audio:this.sounds?.getState()??null,renderBatch:this.sceneBatch?{originalMeshes:this.sceneBatch.originalMeshes,batches:this.sceneBatch.batches}:null,performance:this.performanceStats?.summary()??null,preview:this.preview,animation:{phase:this.posePhase,releaseSeconds:Number(this.releaseTime.toFixed(3))},kind:'bow-deathmatch',mode:this.session?'online':'solo',configured:this.isConfigured(),active:this.running,paused:!this.active||this.isPaused(),health:this.hp,kills:this.kills,deaths:this.deaths,scoreLimit:this.session?this.networkSnapshot?.scoreLimit??20:this.config?.scoreLimit??10,winner:this.winner,draw:Number(this.charge.toFixed(3)),arrowsInFlight:this.arrows.filter(a=>!a.stuck).length,elapsed:Number(this.elapsed.toFixed(2)),player:{id:this.networkSnapshot?.playerId??null,position:{x:this.player.x,y:this.player.y,z:this.player.z},yaw:this.yaw,pitch:this.pitch,alive:this.hp>0},bots:this.bots.map(b=>({name:b.name,health:b.hp,kills:b.kills,deaths:b.deaths,alive:b.hp>0,position:{x:b.mesh.position.x,y:b.mesh.position.y,z:b.mesh.position.z},drawing:b.draw>0})),remotePlayers:[...this.remotePlayers.values()].map(player=>({id:player.id,name:player.name,slot:player.slot,alive:player.hp>0,position:{x:player.mesh.position.x,y:player.mesh.position.y,z:player.mesh.position.z},drawing:player.draw>0})),network:this.networkSnapshot,controls:'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause'};}
+    /** Available only to explicitly opted-in local browser tests. Uses the real fixed-step/input state. */
+    collisionTest(action:{resume?:boolean;position?:[number,number,number];yaw?:number;steps?:number;fire?:{origin:[number,number,number];direction:[number,number,number];remote?:boolean}}={}){
+        if(typeof location==='undefined'||!new URLSearchParams(location.search).has('collisionTest'))throw new Error('Collision test hook disabled');
+        this.testClockPaused=true;
+        if(action.position){this.player.fromArray(action.position);this.velocity.set(0,0,0);this.grounded=false;this.lastWorldImpact=null;this.hp=100;}
+        if(action.yaw!==undefined)this.yaw=action.yaw;
+        if(action.fire){const f=action.fire;this.spawnArrow(new Vector3().fromArray(f.origin),new Vector3().fromArray(f.direction).normalize().multiplyScalar(shotSpeed(1)),-1,undefined,!!f.remote);}
+        for(let i=0;i<Math.min(1200,action.steps??0);i++)this.step(1/120);
+        if(action.resume)this.testClockPaused=false;
+        this.updateCamera();
+        const p=this.lastWorldImpact;
+        let rockDistance=Infinity;
+        if(p&&this.arenaRoot){const triangle=new Triangle(),closest=new Vector3();this.arenaRoot.traverse(object=>{const mesh=object as Mesh;if(!mesh.isMesh||mesh.name!=='Weathered granite')return;const a=mesh.geometry.getAttribute('position'),index=mesh.geometry.index;for(let i=0;i<(index?.count??a.count);i+=3){[triangle.a,triangle.b,triangle.c].forEach((v,j)=>v.fromBufferAttribute(a,index?index.getX(i+j):i+j).applyMatrix4(mesh.matrixWorld));triangle.closestPointToPoint(p,closest);rockDistance=Math.min(rockDistance,closest.distanceTo(p));}});}
+        return {rockDistance:Number.isFinite(rockDistance)?rockDistance:null,position:this.player.toArray(),grounded:this.grounded,penetration:this.collision?.penetration(this.player),lastImpact:p?.toArray()??null,impactDistance:p?this.collision?.bvh.closestPointToPoint(p)?.distance:null,stats:this.collision?.stats(),spawns:Array.from({length:BOW_ROOM_CAP},(_,i)=>{const v=this.slotSpawn(i);return {position:v.toArray(),penetration:this.collision?.penetration(v)};})};
+    }
     private createBot(i:number):Bot {
         const human=makeHuman(i);attachHumanAsset(human,i);const g=human.root;g.name=['ASH','ROOK','VALE','FLINT','MOSS','BEAR'][i];
         const bow=bowModel();bow.scale.setScalar(1);bow.position.set(-.22,1.56,-.60);g.add(bow);
@@ -105,7 +125,7 @@ export class BowGameRuntime {
     private slotSpawn(slot:number){
         if(slot===0)return new Vector3(this.config!.playerSpawn.x,this.config!.playerSpawn.y,this.config!.playerSpawn.z);
         const base=this.config!.botSpawns[(slot-1)%this.config!.botSpawns.length],ring=Math.floor((slot-1)/this.config!.botSpawns.length);
-        return new Vector3(base.x+(ring%2?5:-5)*ring,base.y,base.z+(ring%2?-4:4)*ring);
+        const wanted=new Vector3(base.x+(ring%2?5:-5)*ring,base.y,base.z+(ring%2?-4:4)*ring);return this.collision?.spawn(wanted)??wanted;
     }
     private createRemote(id:string,name:string,slot:number){
         const human=makeHuman(slot);attachHumanAsset(human,slot);const g=human.root;g.name=`REMOTE_${id}`;
@@ -128,8 +148,8 @@ export class BowGameRuntime {
         const previousId=this.networkSnapshot?.playerId;this.networkSnapshot=snapshot;this.syncRemotePlayers(snapshot);
         if(snapshot.playerId)this.kills=snapshot.scores[snapshot.playerId]??0;
         const local=snapshot.players.find(player=>player.local);if(local)this.deaths=local.deaths;
-        if(message?.type==='welcome'&&snapshot.playerId!==previousId){const own=snapshot.players.find(player=>player.local);if(own){this.player.copy(this.slotSpawn(own.slot));this.velocity.set(0,0,0);this.hp=100;}}
-        if(message?.type==='shot'&&message.playerId!==snapshot.playerId)this.spawnArrow(new Vector3(message.origin.x,message.origin.y,message.origin.z),new Vector3(message.velocity.x,message.velocity.y,message.velocity.z),0,message.arrowId,true);
+        if(message?.type==='welcome'&&snapshot.playerId!==previousId){const own=snapshot.players.find(player=>player.local);if(own){this.player.copy(this.slotSpawn(own.slot));this.velocity.set(0,0,0);this.grounded=false;this.lastWorldImpact=null;this.hp=100;}}
+        if(message?.type==='shot'&&message.playerId!==snapshot.playerId)this.spawnArrow(new Vector3(message.origin.x,message.origin.y,message.origin.z),new Vector3(message.velocity.x,message.velocity.y,message.velocity.z),0,message.arrowId,true,shotDamage(1),message.playerId);
         if(message?.type==='hit'&&message.targetId===snapshot.playerId)this.applyNetworkHit(message);
         if(message?.type==='death'){const player=this.remotePlayers.get(message.playerId);if(player){player.hp=0;player.mesh.visible=false;}}
         if(message?.type==='round_end'){const winner=snapshot.players.find(player=>player.id===message.winnerId);this.winner=message.winnerId===snapshot.playerId?'YOU':winner?.name??'ARCHER';this.message=`${this.winner} reached ${snapshot.scoreLimit} eliminations`;this.messageUntil=Infinity;}
@@ -144,7 +164,7 @@ export class BowGameRuntime {
         this.deaths++;this.deadUntil=this.elapsed+3;this.drawing=false;this.charge=0;this.session?.sendDeath(message.playerId);this.message='YOU WERE ELIMINATED';this.messageUntil=this.elapsed+3;
     }
     private resetOnlineRound(){
-        this.hp=100;this.deadUntil=0;this.winner='';this.receivedHits.clear();const local=this.networkSnapshot?.players.find(player=>player.local);this.player.copy(this.slotSpawn(local?.slot??0));this.velocity.set(0,0,0);this.drawing=false;this.charge=0;this.cooldown=0;this.releaseTime=-1;this.message='NEW ROUND';this.messageUntil=this.elapsed+2;
+        this.hp=100;this.deadUntil=0;this.winner='';this.receivedHits.clear();const local=this.networkSnapshot?.players.find(player=>player.local);this.player.copy(this.slotSpawn(local?.slot??0));this.velocity.set(0,0,0);this.grounded=false;this.lastWorldImpact=null;this.drawing=false;this.charge=0;this.cooldown=0;this.releaseTime=-1;this.message='NEW ROUND';this.messageUntil=this.elapsed+2;
         this.arrows.forEach(arrow=>disposeGroup(arrow.mesh));this.arrows=[];this.trails?.clear();for(const player of this.remotePlayers.values()){player.hp=100;player.mesh.visible=true;player.target.copy(this.slotSpawn(player.slot));}
     }
     private updateBotPose(b:Bot,draw:number,walk=0,relaxed=false,release=-1){
@@ -156,8 +176,8 @@ export class BowGameRuntime {
         if(!relaxed){poseArm(b.human.left,new Vector3(-.245,1.44,0),new Vector3(-.29,1.46,-.31),b.bow.position,b.bow.quaternion);if(release<.15||release>=1.05)poseArm(b.human.right,new Vector3(.245,1.44,0),new Vector3(.40+pose.draw*.12,1.38+pose.draw*.08,-.12+pose.draw*.2),nock,b.bow.quaternion);}
         b.heldArrow.position.copy(nock).add(new Vector3(0,0,-.28).applyQuaternion(b.bow.quaternion));b.heldArrow.quaternion.copy(b.bow.quaternion);b.human.applyPose?.(relaxed);
     }
-    private restart(){this.preview=null;if(!this.config)return;const local=this.networkSnapshot?.players.find(player=>player.local);this.player.copy(this.session?this.slotSpawn(local?.slot??0):this.config.playerSpawn);this.hp=100;this.kills=0;this.deaths=0;this.deadUntil=0;this.winner='';this.elapsed=0;this.yaw=0;this.pitch=0;this.velocity.set(0,0,0);this.drawing=false;this.charge=0;this.cooldown=0;this.releaseTime=-1;this.releasedCharge=0;this.releaseFrom=null;this.cancelFrom=null;this.cancelTime=-1;this.aimBlend=0;this.aiming=false;this.queuedDraw=false;this.flash=0;this.hit=0;this.message='';this.messageUntil=0;this.accumulator=0;this.networkAccumulator=0;this.networkSeq=0;this.receivedHits.clear();this.arrows.forEach(a=>disposeGroup(a.mesh));this.arrows=[];this.trails?.clear();this.bots.forEach((b,i)=>{b.kills=0;b.deaths=0;this.spawnBot(b,i);});this.updateCamera();}
-    private spawnBot(b:Bot,i:number){const p=this.config!.botSpawns[i%this.config!.botSpawns.length];b.mesh.position.set(p.x+(i>=3?3:0),0,p.z);if(b.mesh.position.distanceTo(this.player)<8)b.mesh.position.multiplyScalar(-1);b.hp=100;b.mesh.visible=true;b.cooldown=2+i*.35;b.draw=0;b.release=-1;b.respawn=0;this.updateBotPose(b,0);}
+    private restart(){this.preview=null;if(!this.config)return;const local=this.networkSnapshot?.players.find(player=>player.local);this.player.copy(this.session?this.slotSpawn(local?.slot??0):this.config.playerSpawn);this.hp=100;this.kills=0;this.deaths=0;this.deadUntil=0;this.winner='';this.elapsed=0;this.yaw=0;this.pitch=0;this.velocity.set(0,0,0);this.grounded=false;this.lastWorldImpact=null;this.drawing=false;this.charge=0;this.cooldown=0;this.releaseTime=-1;this.releasedCharge=0;this.releaseFrom=null;this.cancelFrom=null;this.cancelTime=-1;this.aimBlend=0;this.aiming=false;this.queuedDraw=false;this.flash=0;this.hit=0;this.message='';this.messageUntil=0;this.accumulator=0;this.networkAccumulator=0;this.networkSeq=0;this.receivedHits.clear();this.arrows.forEach(a=>disposeGroup(a.mesh));this.arrows=[];this.trails?.clear();this.bots.forEach((b,i)=>{b.kills=0;b.deaths=0;this.spawnBot(b,i);});this.updateCamera();}
+    private spawnBot(b:Bot,i:number){const p=this.config!.botSpawns[i%this.config!.botSpawns.length];b.mesh.position.set(p.x+(i>=3?3:0),p.y,p.z);if(b.mesh.position.distanceTo(this.player)<8)b.mesh.position.set(-b.mesh.position.x,b.mesh.position.y,-b.mesh.position.z);if(this.collision)b.mesh.position.copy(this.collision.spawn(b.mesh.position,.42));b.velocity=new Vector3();b.stuckTime=0;b.stuckAnchor=b.mesh.position.clone();b.escapeTarget=undefined;b.hp=100;b.mesh.visible=true;b.cooldown=2+i*.35;b.draw=0;b.release=-1;b.respawn=0;this.updateBotPose(b,0);}
     private typing(target:EventTarget|null){const e=target as HTMLElement;return e&&(e.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(e.tagName));}
     private onKeyDown=(e:KeyboardEvent)=>{if(!this.running||this.typing(e.target)||!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyR','KeyM'].includes(e.code))return;e.preventDefault();e.stopImmediatePropagation();if(e.code==='KeyR'&&!e.repeat){if(!this.session)this.restart();}else if(e.code==='KeyM'&&!e.repeat){if(this.sounds)this.sounds.setMuted(!this.sounds.isMuted());}else this.keys.add(e.code);};
     private onKeyUp=(e:KeyboardEvent)=>{if(this.keys.delete(e.code)){e.preventDefault();e.stopImmediatePropagation();}};
@@ -194,12 +214,12 @@ export class BowGameRuntime {
         const velocity=direction.multiplyScalar(shotSpeed(charge)),arrowId=this.session&&owner<0?`${this.networkSnapshot?.playerId??'pending'}-${++this.arrowSeq}`:undefined;
         this.spawnArrow(position,velocity,owner,arrowId,false,shotDamage(charge));if(arrowId)this.session?.sendShot(arrowId,{x:position.x,y:position.y,z:position.z},{x:velocity.x,y:velocity.y,z:velocity.z});
     }
-    private spawnArrow(position:Vector3,velocity:Vector3,owner:number,arrowId?:string,visualOnly=false,damage=shotDamage(1)){this.sounds?.release(owner<0?undefined:position,owner);const model=arrowModel();model.position.copy(position);this.root.add(model);if(!this.trails){this.trails=new BowArrowTrails();this.root.add(this.trails.root);}const trail=this.trails.spawn(position,this.elapsed);this.arrows.push({mesh:model,position,velocity,owner,damage,age:0,stuck:false,trail,arrowId,visualOnly});if(this.arrows.length>90){const old=this.arrows.shift()!;this.trails.remove(old.trail);disposeGroup(old.mesh);}}
+    private spawnArrow(position:Vector3,velocity:Vector3,owner:number,arrowId?:string,visualOnly=false,damage=shotDamage(1),sourcePlayerId?:string){this.sounds?.release(owner<0?undefined:position,owner);const model=arrowModel();model.position.copy(position);this.root.add(model);if(!this.trails){this.trails=new BowArrowTrails();this.root.add(this.trails.root);}const trail=this.trails.spawn(position,this.elapsed);this.arrows.push({mesh:model,position,velocity,owner,damage,age:0,stuck:false,trail,arrowId,visualOnly,sourcePlayerId});if(this.arrows.length>90){const old=this.arrows.shift()!;this.trails.remove(old.trail);disposeGroup(old.mesh);}}
     update(deltaTime:number,time=performance.now()){
         if(!this.running)return false;
         const start=performance.now(),frameMs=Math.max(0,deltaTime),dt=Math.min(frameMs/1000,.08);
         const active=this.active&&!this.isPaused()&&!this.winner;
-        if(active){this.accumulator+=dt;while(this.accumulator>=1/120){this.step(1/120);this.accumulator-=1/120;}}
+        if(active&&!this.testClockPaused){this.accumulator+=dt;while(this.accumulator>=1/120){this.step(1/120);this.accumulator-=1/120;}}
         for(const bot of this.bots)if(bot.hp>0)this.updateBotPose(bot,bot.draw,bot.walk??0,false,bot.release);
         for(const player of this.remotePlayers.values())if(player.hp>0){this.updateBotPose(player,player.draw,player.walk??0,false,player.release);player.bow.rotation.x+=player.targetPitch*.25;}
         this.updateCamera();if(time-this.lastHudUpdate>33){this.updateHud();this.lastHudUpdate=time;this.sounds?.draw(-1,active&&this.hp>0&&this.drawing?this.charge:0);for(let i=0;i<this.bots.length;i++)this.sounds?.draw(i,active&&this.bots[i].hp>0?this.bots[i].draw:0,this.bots[i].mesh.position);}
@@ -214,12 +234,20 @@ export class BowGameRuntime {
         this.cooldown=Math.max(0,this.cooldown-dt);
         if(this.queuedDraw&&this.cooldown<=0&&this.cancelTime<0&&this.hp>0&&!this.winner){this.drawing=true;this.charge=0;this.queuedDraw=false;}
         this.recoil=Math.max(0,this.recoil-dt*5);this.flash=Math.max(0,this.flash-dt*1.8);this.hit=Math.max(0,this.hit-dt*2.8);
-        if(this.hp<=0){if(this.elapsed>=this.deadUntil){this.hp=100;const local=this.networkSnapshot?.players.find(player=>player.local);this.player.copy(this.session?this.slotSpawn(local?.slot??0):this.config!.playerSpawn);this.velocity.set(0,0,0);}}else{
+        if(this.hp<=0){if(this.elapsed>=this.deadUntil){this.hp=100;const local=this.networkSnapshot?.players.find(player=>player.local);this.player.copy(this.session?this.slotSpawn(local?.slot??0):this.config!.playerSpawn);this.velocity.set(0,0,0);this.grounded=false;this.lastWorldImpact=null;}}else{
             const x=Number(this.keys.has('KeyD')||this.keys.has('ArrowRight'))-Number(this.keys.has('KeyA')||this.keys.has('ArrowLeft')),z=Number(this.keys.has('KeyS')||this.keys.has('ArrowDown'))-Number(this.keys.has('KeyW')||this.keys.has('ArrowUp'));
             const length=Math.hypot(x,z)||1,sprint=(this.keys.has('ShiftLeft')||this.keys.has('ShiftRight'))&&!this.drawing;const speed=this.drawing?2.6:sprint?7:4.5;
             const dx=(x*Math.cos(this.yaw)+z*Math.sin(this.yaw))/length*speed*dt,dz=(-x*Math.sin(this.yaw)+z*Math.cos(this.yaw))/length*speed*dt;
-            this.player.copy(moveWithCover(this.player,dx,dz,this.config!.obstacles));
-            if(this.keys.has('Space')&&this.player.y===0)this.velocity.y=4.8;this.velocity.y-=GRAVITY*dt;this.player.y=Math.max(0,this.player.y+this.velocity.y*dt);if(this.player.y===0)this.velocity.y=0;
+            if(this.collision){
+                this.velocity.x=dx/dt;this.velocity.z=dz/dt;
+                if(this.keys.has('Space')&&this.grounded){this.velocity.y=4.8;this.grounded=false;}
+                this.velocity.y-=GRAVITY*dt;
+                this.grounded=this.collision.move(this.player,this.velocity,dt);
+            }else{
+                // Legacy geometry-free harness callers; the hosted arena always owns a BVH.
+                this.player.copy(moveWithCover(this.player,dx,dz,this.config!.obstacles));
+                if(this.keys.has('Space')&&this.player.y===0)this.velocity.y=4.8;this.velocity.y-=GRAVITY*dt;this.player.y=Math.max(0,this.player.y+this.velocity.y*dt);if(this.player.y===0)this.velocity.y=0;
+            }
             if(this.drawing)this.charge=Math.min(1,this.charge+dt/BOW_DRAW_SECONDS);
         }
         this.bots.forEach((b,i)=>this.stepBot(b,i,dt));this.stepRemotePlayers(dt);this.stepArrows(dt);this.sendNetworkState(dt);
@@ -237,22 +265,30 @@ export class BowGameRuntime {
         if(b.hp<=0){if(this.elapsed>b.respawn)this.spawnBot(b,index);return;}
         const target=this.player.clone().add(new Vector3(0,1.28,0)),origin=b.mesh.position.clone().add(new Vector3(0,1.34,0));const delta=target.clone().sub(origin),distance=delta.length();
         b.mesh.rotation.y=Math.atan2(-delta.x,-delta.z);b.cooldown-=dt;if(b.release>=0){b.release+=dt;if(b.release>=1.05)b.release=-1;}
-        const blocked=this.config!.obstacles.some(c=>segmentCover(origin,target,c)!==null);const advance=distance>17?1:distance<9?-.8:.05;const strafe=Math.sin(this.elapsed*.7+b.phase)>.0?1:-1;
+        const blocked=this.collision?this.collision.segment(origin,target)!==null:this.config!.obstacles.some(c=>segmentCover(origin,target,c)!==null);const advance=distance>17?1:distance<9?-.8:.05;const strafe=Math.sin(this.elapsed*.7+b.phase)>.0?1:-1;
         const toward=delta.clone().setY(0).normalize(),side=new Vector3(-toward.z,0,toward.x);const movement=toward.multiplyScalar(blocked?1:advance).addScaledVector(side,blocked?1:.7).normalize().multiplyScalar((b.draw?1.2:2.1)*dt);
-        const old=b.mesh.position.clone();b.mesh.position.copy(moveWithCover(old,movement.x,movement.z,this.config!.obstacles,.42));const walking=old.distanceTo(b.mesh.position)>dt*.2;b.leftLeg.rotation.x=walking?Math.sin(this.elapsed*7+b.phase)*.5:0;b.rightLeg.rotation.x=-b.leftLeg.rotation.x;
+        const old=b.mesh.position.clone();
+        if(this.collision){
+            if(b.escapeTarget){movement.copy(b.escapeTarget).sub(old).setY(0).normalize().multiplyScalar((b.draw?1.2:2.1)*dt);if(old.distanceTo(b.escapeTarget)<.6)b.escapeTarget=undefined;}
+            b.velocity??=new Vector3();b.velocity.x=movement.x/dt;b.velocity.z=movement.z/dt;b.velocity.y-=GRAVITY*dt;
+            this.collision.move(b.mesh.position,b.velocity,dt,.42);
+            b.stuckAnchor??=old.clone();b.stuckTime=(b.stuckTime??0)+dt;
+            if(b.stuckTime>=1.5){if(b.mesh.position.distanceTo(b.stuckAnchor)<.2){const angle=Math.random()*Math.PI*2;b.escapeTarget=old.clone().add(new Vector3(Math.cos(angle)*4,0,Math.sin(angle)*4));}b.stuckAnchor.copy(b.mesh.position);b.stuckTime=0;}
+        }else b.mesh.position.copy(moveWithCover(old,movement.x,movement.z,this.config!.obstacles,.42));const walking=old.distanceTo(b.mesh.position)>dt*.2;b.leftLeg.rotation.x=walking?Math.sin(this.elapsed*7+b.phase)*.5:0;b.rightLeg.rotation.x=-b.leftLeg.rotation.x;
         if(this.hp>0&&!blocked&&distance<38&&b.cooldown<=0){b.draw+=dt/1.1;if(b.draw>=1){const level=this.config!.difficulty,spread=level==='easy'?.10:level==='hard'?.017:.045;const speed=shotSpeed(.85);target.y+=GRAVITY*.5*Math.pow(distance/speed,2);target.x+=(Math.random()-.5)*distance*spread;target.y+=(Math.random()-.5)*distance*spread;this.fire(origin,target.sub(origin).normalize(),index,.85);b.draw=0;b.release=0;b.cooldown=(level==='easy'?3.4:level==='hard'?1.7:2.6)+Math.random();}}else b.draw=Math.max(0,b.draw-dt*2);
         b.walk=walking?Math.sin(this.elapsed*7+b.phase):0;
     }
     private stepArrows(dt:number){for(const arrow of [...this.arrows]){
         arrow.age+=dt;if(arrow.age>12){this.trails?.remove(arrow.trail);disposeGroup(arrow.mesh);this.arrows.splice(this.arrows.indexOf(arrow),1);continue;}if(arrow.stuck)continue;
         const from=arrow.position.clone();arrow.velocity.y-=GRAVITY*dt;const to=from.clone().addScaledVector(arrow.velocity,dt);let nearest=1,victim:number|string|null=null,head=false,collided=false;
-        if(to.y<=.025){nearest=Math.max(0,(from.y-.025)/(from.y-to.y));collided=true;}
-        for(const c of this.config!.obstacles){const t=segmentCover(from,to,c);if(t!==null&&t<=nearest){nearest=t;victim=null;collided=true;}}
-        const candidates:{position:Vector3;hp:number;index:number|string}[]=arrow.visualOnly?[]:this.session&&arrow.owner<0?[...this.remotePlayers.values()].map(player=>({position:player.mesh.position,hp:player.hp,index:player.id})):arrow.owner<0?this.bots.map((b,i)=>({position:b.mesh.position,hp:b.hp,index:i})):[{position:this.player,hp:this.hp,index:-1}];
+        if(this.collision){const hit=this.collision.segment(from,to);if(hit){nearest=hit.t;collided=true;}}
+        else{if(to.y<=.025){nearest=Math.max(0,(from.y-.025)/(from.y-to.y));collided=true;}
+        for(const c of this.config!.obstacles){const t=segmentCover(from,to,c);if(t!==null&&t<=nearest){nearest=t;victim=null;collided=true;}}}
+        const candidates:{position:Vector3;hp:number;index:number|string}[]=arrow.visualOnly?[{position:this.player,hp:this.hp,index:-1},...[...this.remotePlayers.values()].filter(p=>p.id!==arrow.sourcePlayerId).map(p=>({position:p.mesh.position,hp:p.hp,index:p.id}))]:this.session&&arrow.owner<0?[...this.remotePlayers.values()].map(player=>({position:player.mesh.position,hp:player.hp,index:player.id})):arrow.owner<0?this.bots.map((b,i)=>({position:b.mesh.position,hp:b.hp,index:i})):[{position:this.player,hp:this.hp,index:-1}];
         for(const c of candidates){if(c.hp<=0)continue;for(const [height,r,isHead]of [[1.65,.24,true],[1.05,.4,false],[.5,.29,false]] as const){const t=segmentSphere(from,to,c.position.clone().add(new Vector3(0,height,0)),r);if(t!==null&&t<nearest){nearest=t;victim=c.index;head=isHead;collided=true;}}}
         arrow.position.copy(from).lerp(to,nearest);this.trails?.sample(arrow.trail,arrow.position,this.elapsed);arrow.mesh.position.copy(arrow.position).addScaledVector(arrow.velocity.clone().normalize(),-.765);arrow.mesh.quaternion.setFromUnitVectors(new Vector3(0,0,-1),arrow.velocity.clone().normalize());
         if(!collided&&arrow.owner>=0&&!arrow.whizzed&&this.sounds?.whizz(from,to))arrow.whizzed=true;
-        if(collided){this.sounds?.impact(arrow.position,head?'head':victim!==null?'body':'cover');this.trails?.stop(arrow.trail);arrow.stuck=true;arrow.age=8;if(victim!==null){const damage=Math.round(arrow.damage*(head?1.8:1));if(typeof victim==='string'){if(head)this.sounds?.headshotConfirm();this.hit=1;const remote=this.remotePlayers.get(victim);this.message=`${head?'HEADSHOT':'HIT'}  −${damage}  ${remote?.name??'ARCHER'}`;this.messageUntil=this.elapsed+1.7;if(arrow.arrowId)this.session?.sendHit(victim,arrow.arrowId,damage,head);}else this.damage(victim,damage,arrow.owner,head);arrow.mesh.visible=false;}}
+        if(collided){if(victim===null)this.lastWorldImpact=arrow.position.clone();this.sounds?.impact(arrow.position,head?'head':victim!==null?'body':'cover');this.trails?.stop(arrow.trail);arrow.stuck=true;arrow.age=8;if(victim!==null){if(arrow.visualOnly){arrow.mesh.visible=false;continue;}const damage=Math.round(arrow.damage*(head?1.8:1));if(typeof victim==='string'){if(head)this.sounds?.headshotConfirm();this.hit=1;const remote=this.remotePlayers.get(victim);this.message=`${head?'HEADSHOT':'HIT'}  −${damage}  ${remote?.name??'ARCHER'}`;this.messageUntil=this.elapsed+1.7;if(arrow.arrowId)this.session?.sendHit(victim,arrow.arrowId,damage,head);}else this.damage(victim,damage,arrow.owner,head);arrow.mesh.visible=false;}}
         if(arrow.position.length()>110){this.trails?.remove(arrow.trail);disposeGroup(arrow.mesh);this.arrows.splice(this.arrows.indexOf(arrow),1);}
     }}
     private damage(victim:number,damage:number,owner:number,head:boolean){

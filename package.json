@@ -25,11 +25,14 @@
     "kite3d"
   ],
   "dependencies": {
+    "three": "file:../kite3d/threepipe/node_modules/three",
+    "three-mesh-bvh": "0.9.5",
     "threepipe": "file:/private/tmp/kite3d/threepipe"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260908.1",
     "@playwright/test": "1.62.1",
+    "@types/three": "file:../kite3d/threepipe/node_modules/@types/three",
     "esbuild": "^0.25.9",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",

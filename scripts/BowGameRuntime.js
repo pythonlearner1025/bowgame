@@ -1,9 +1,10 @@
-import { Group, Mesh, CylinderGeometry, SphereGeometry, BoxGeometry, MeshStandardMaterial, Vector3, Quaternion, Color, FogExp2, HemisphereLight, DirectionalLight, BufferGeometry, TubeGeometry, CatmullRomCurve3, Line, LineBasicMaterial } from 'threepipe';
+import { Triangle, Group, Mesh, CylinderGeometry, SphereGeometry, BoxGeometry, MeshStandardMaterial, Vector3, Quaternion, Color, FogExp2, HemisphereLight, DirectionalLight, BufferGeometry, TubeGeometry, CatmullRomCurve3, Line, LineBasicMaterial } from 'threepipe';
 import { makeFieldBow, deformBow, bowNock, makeHuman, poseHuman, makeArm, poseArm, sampleBowPose, firstPersonSkin } from './BowVisuals.js';
 import { preloadHumanAsset, attachHumanAsset } from './BowHumanAsset.js';
 import { attachFirstPersonArm } from './BowHandRig.js';
 import { sampleReferenceAction, sampleReferenceTimeline, referenceScreenPoint, referenceRotation, referenceArrow, blendReferencePoses, BOW_RELEASE_SECONDS } from './BowReferenceClip.js';
 import { BowArrowTrails } from './BowArrowTrail.js';
+import { BowCollision } from './BowCollision.js';
 import { batchBowScene } from './BowSceneBatch.js';
 import { BowAudio } from './BowAudio.js';
 import { BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover } from './BowPhysics.js';
@@ -34,6 +35,10 @@ export class BowGameRuntime {
     session;
     performanceStats;
     lifecycle = 0;
+    collision = null;
+    grounded = false;
+    testClockPaused = false;
+    lastWorldImpact = null;
     preview = null;
     inspect(params) {
         if (!this.running)
@@ -171,8 +176,12 @@ export class BowGameRuntime {
         this.root.name = 'K3D_BOW_RUNTIME';
         scene.add(this.root);
         const arena = this.arenaRoot ?? scene.modelRoot.children.find(object => object.name === 'K3D_BOW_DEMO_ARENA');
-        if (arena)
+        if (arena) {
+            this.collision = new BowCollision(arena);
+            this.config.playerSpawn = this.collision.spawn(new Vector3().copy(this.config.playerSpawn));
+            this.config.botSpawns = this.config.botSpawns.map(p => this.collision.spawn(new Vector3().copy(p), .42));
             this.sceneBatch = batchBowScene(arena, this.root);
+        }
         this.trails = new BowArrowTrails();
         this.root.add(this.trails.root);
         const sky = new HemisphereLight(0xd9e6ee, 0x5b6040, 1.15);
@@ -252,6 +261,8 @@ export class BowGameRuntime {
         this.overlay = null;
         this.hud = {};
         this.hudValues = Object.create(null);
+        this.collision?.dispose();
+        this.collision = null;
         this.trails?.dispose();
         this.trails = null;
         this.sceneBatch?.dispose();
@@ -289,7 +300,43 @@ export class BowGameRuntime {
         this.sounds = null;
         return this.getState();
     }
-    getState() { return { audio: this.sounds?.getState() ?? null, renderBatch: this.sceneBatch ? { originalMeshes: this.sceneBatch.originalMeshes, batches: this.sceneBatch.batches } : null, performance: this.performanceStats?.summary() ?? null, preview: this.preview, animation: { phase: this.posePhase, releaseSeconds: Number(this.releaseTime.toFixed(3)) }, kind: 'bow-deathmatch', mode: this.session ? 'online' : 'solo', configured: this.isConfigured(), active: this.running, paused: !this.active || this.isPaused(), health: this.hp, kills: this.kills, deaths: this.deaths, scoreLimit: this.session ? this.networkSnapshot?.scoreLimit ?? 20 : this.config?.scoreLimit ?? 10, winner: this.winner, draw: Number(this.charge.toFixed(3)), arrowsInFlight: this.arrows.filter(a => !a.stuck).length, elapsed: Number(this.elapsed.toFixed(2)), player: { id: this.networkSnapshot?.playerId ?? null, position: { x: this.player.x, y: this.player.y, z: this.player.z }, yaw: this.yaw, pitch: this.pitch, alive: this.hp > 0 }, bots: this.bots.map(b => ({ name: b.name, health: b.hp, kills: b.kills, deaths: b.deaths, alive: b.hp > 0, position: { x: b.mesh.position.x, y: b.mesh.position.y, z: b.mesh.position.z }, drawing: b.draw > 0 })), remotePlayers: [...this.remotePlayers.values()].map(player => ({ id: player.id, name: player.name, slot: player.slot, alive: player.hp > 0, position: { x: player.mesh.position.x, y: player.mesh.position.y, z: player.mesh.position.z }, drawing: player.draw > 0 })), network: this.networkSnapshot, controls: 'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause' }; }
+    getState() { return { collision: this.collision?.stats() ?? null, audio: this.sounds?.getState() ?? null, renderBatch: this.sceneBatch ? { originalMeshes: this.sceneBatch.originalMeshes, batches: this.sceneBatch.batches } : null, performance: this.performanceStats?.summary() ?? null, preview: this.preview, animation: { phase: this.posePhase, releaseSeconds: Number(this.releaseTime.toFixed(3)) }, kind: 'bow-deathmatch', mode: this.session ? 'online' : 'solo', configured: this.isConfigured(), active: this.running, paused: !this.active || this.isPaused(), health: this.hp, kills: this.kills, deaths: this.deaths, scoreLimit: this.session ? this.networkSnapshot?.scoreLimit ?? 20 : this.config?.scoreLimit ?? 10, winner: this.winner, draw: Number(this.charge.toFixed(3)), arrowsInFlight: this.arrows.filter(a => !a.stuck).length, elapsed: Number(this.elapsed.toFixed(2)), player: { id: this.networkSnapshot?.playerId ?? null, position: { x: this.player.x, y: this.player.y, z: this.player.z }, yaw: this.yaw, pitch: this.pitch, alive: this.hp > 0 }, bots: this.bots.map(b => ({ name: b.name, health: b.hp, kills: b.kills, deaths: b.deaths, alive: b.hp > 0, position: { x: b.mesh.position.x, y: b.mesh.position.y, z: b.mesh.position.z }, drawing: b.draw > 0 })), remotePlayers: [...this.remotePlayers.values()].map(player => ({ id: player.id, name: player.name, slot: player.slot, alive: player.hp > 0, position: { x: player.mesh.position.x, y: player.mesh.position.y, z: player.mesh.position.z }, drawing: player.draw > 0 })), network: this.networkSnapshot, controls: 'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause' }; }
+    /** Available only to explicitly opted-in local browser tests. Uses the real fixed-step/input state. */
+    collisionTest(action = {}) {
+        if (typeof location === 'undefined' || !new URLSearchParams(location.search).has('collisionTest'))
+            throw new Error('Collision test hook disabled');
+        this.testClockPaused = true;
+        if (action.position) {
+            this.player.fromArray(action.position);
+            this.velocity.set(0, 0, 0);
+            this.grounded = false;
+            this.lastWorldImpact = null;
+            this.hp = 100;
+        }
+        if (action.yaw !== undefined)
+            this.yaw = action.yaw;
+        if (action.fire) {
+            const f = action.fire;
+            this.spawnArrow(new Vector3().fromArray(f.origin), new Vector3().fromArray(f.direction).normalize().multiplyScalar(shotSpeed(1)), -1, undefined, !!f.remote);
+        }
+        for (let i = 0; i < Math.min(1200, action.steps ?? 0); i++)
+            this.step(1 / 120);
+        if (action.resume)
+            this.testClockPaused = false;
+        this.updateCamera();
+        const p = this.lastWorldImpact;
+        let rockDistance = Infinity;
+        if (p && this.arenaRoot) {
+            const triangle = new Triangle(), closest = new Vector3();
+            this.arenaRoot.traverse(object => { const mesh = object; if (!mesh.isMesh || mesh.name !== 'Weathered granite')
+                return; const a = mesh.geometry.getAttribute('position'), index = mesh.geometry.index; for (let i = 0; i < (index?.count ?? a.count); i += 3) {
+                [triangle.a, triangle.b, triangle.c].forEach((v, j) => v.fromBufferAttribute(a, index ? index.getX(i + j) : i + j).applyMatrix4(mesh.matrixWorld));
+                triangle.closestPointToPoint(p, closest);
+                rockDistance = Math.min(rockDistance, closest.distanceTo(p));
+            } });
+        }
+        return { rockDistance: Number.isFinite(rockDistance) ? rockDistance : null, position: this.player.toArray(), grounded: this.grounded, penetration: this.collision?.penetration(this.player), lastImpact: p?.toArray() ?? null, impactDistance: p ? this.collision?.bvh.closestPointToPoint(p)?.distance : null, stats: this.collision?.stats(), spawns: Array.from({ length: BOW_ROOM_CAP }, (_, i) => { const v = this.slotSpawn(i); return { position: v.toArray(), penetration: this.collision?.penetration(v) }; }) };
+    }
     createBot(i) {
         const human = makeHuman(i);
         attachHumanAsset(human, i);
@@ -309,7 +356,8 @@ export class BowGameRuntime {
         if (slot === 0)
             return new Vector3(this.config.playerSpawn.x, this.config.playerSpawn.y, this.config.playerSpawn.z);
         const base = this.config.botSpawns[(slot - 1) % this.config.botSpawns.length], ring = Math.floor((slot - 1) / this.config.botSpawns.length);
-        return new Vector3(base.x + (ring % 2 ? 5 : -5) * ring, base.y, base.z + (ring % 2 ? -4 : 4) * ring);
+        const wanted = new Vector3(base.x + (ring % 2 ? 5 : -5) * ring, base.y, base.z + (ring % 2 ? -4 : 4) * ring);
+        return this.collision?.spawn(wanted) ?? wanted;
     }
     createRemote(id, name, slot) {
         const human = makeHuman(slot);
@@ -379,11 +427,13 @@ export class BowGameRuntime {
             if (own) {
                 this.player.copy(this.slotSpawn(own.slot));
                 this.velocity.set(0, 0, 0);
+                this.grounded = false;
+                this.lastWorldImpact = null;
                 this.hp = 100;
             }
         }
         if (message?.type === 'shot' && message.playerId !== snapshot.playerId)
-            this.spawnArrow(new Vector3(message.origin.x, message.origin.y, message.origin.z), new Vector3(message.velocity.x, message.velocity.y, message.velocity.z), 0, message.arrowId, true);
+            this.spawnArrow(new Vector3(message.origin.x, message.origin.y, message.origin.z), new Vector3(message.velocity.x, message.velocity.y, message.velocity.z), 0, message.arrowId, true, shotDamage(1), message.playerId);
         if (message?.type === 'hit' && message.targetId === snapshot.playerId)
             this.applyNetworkHit(message);
         if (message?.type === 'death') {
@@ -436,6 +486,8 @@ export class BowGameRuntime {
         const local = this.networkSnapshot?.players.find(player => player.local);
         this.player.copy(this.slotSpawn(local?.slot ?? 0));
         this.velocity.set(0, 0, 0);
+        this.grounded = false;
+        this.lastWorldImpact = null;
         this.drawing = false;
         this.charge = 0;
         this.cooldown = 0;
@@ -476,9 +528,10 @@ export class BowGameRuntime {
         b.human.applyPose?.(relaxed);
     }
     restart() { this.preview = null; if (!this.config)
-        return; const local = this.networkSnapshot?.players.find(player => player.local); this.player.copy(this.session ? this.slotSpawn(local?.slot ?? 0) : this.config.playerSpawn); this.hp = 100; this.kills = 0; this.deaths = 0; this.deadUntil = 0; this.winner = ''; this.elapsed = 0; this.yaw = 0; this.pitch = 0; this.velocity.set(0, 0, 0); this.drawing = false; this.charge = 0; this.cooldown = 0; this.releaseTime = -1; this.releasedCharge = 0; this.releaseFrom = null; this.cancelFrom = null; this.cancelTime = -1; this.aimBlend = 0; this.aiming = false; this.queuedDraw = false; this.flash = 0; this.hit = 0; this.message = ''; this.messageUntil = 0; this.accumulator = 0; this.networkAccumulator = 0; this.networkSeq = 0; this.receivedHits.clear(); this.arrows.forEach(a => disposeGroup(a.mesh)); this.arrows = []; this.trails?.clear(); this.bots.forEach((b, i) => { b.kills = 0; b.deaths = 0; this.spawnBot(b, i); }); this.updateCamera(); }
-    spawnBot(b, i) { const p = this.config.botSpawns[i % this.config.botSpawns.length]; b.mesh.position.set(p.x + (i >= 3 ? 3 : 0), 0, p.z); if (b.mesh.position.distanceTo(this.player) < 8)
-        b.mesh.position.multiplyScalar(-1); b.hp = 100; b.mesh.visible = true; b.cooldown = 2 + i * .35; b.draw = 0; b.release = -1; b.respawn = 0; this.updateBotPose(b, 0); }
+        return; const local = this.networkSnapshot?.players.find(player => player.local); this.player.copy(this.session ? this.slotSpawn(local?.slot ?? 0) : this.config.playerSpawn); this.hp = 100; this.kills = 0; this.deaths = 0; this.deadUntil = 0; this.winner = ''; this.elapsed = 0; this.yaw = 0; this.pitch = 0; this.velocity.set(0, 0, 0); this.grounded = false; this.lastWorldImpact = null; this.drawing = false; this.charge = 0; this.cooldown = 0; this.releaseTime = -1; this.releasedCharge = 0; this.releaseFrom = null; this.cancelFrom = null; this.cancelTime = -1; this.aimBlend = 0; this.aiming = false; this.queuedDraw = false; this.flash = 0; this.hit = 0; this.message = ''; this.messageUntil = 0; this.accumulator = 0; this.networkAccumulator = 0; this.networkSeq = 0; this.receivedHits.clear(); this.arrows.forEach(a => disposeGroup(a.mesh)); this.arrows = []; this.trails?.clear(); this.bots.forEach((b, i) => { b.kills = 0; b.deaths = 0; this.spawnBot(b, i); }); this.updateCamera(); }
+    spawnBot(b, i) { const p = this.config.botSpawns[i % this.config.botSpawns.length]; b.mesh.position.set(p.x + (i >= 3 ? 3 : 0), p.y, p.z); if (b.mesh.position.distanceTo(this.player) < 8)
+        b.mesh.position.set(-b.mesh.position.x, b.mesh.position.y, -b.mesh.position.z); if (this.collision)
+        b.mesh.position.copy(this.collision.spawn(b.mesh.position, .42)); b.velocity = new Vector3(); b.stuckTime = 0; b.stuckAnchor = b.mesh.position.clone(); b.escapeTarget = undefined; b.hp = 100; b.mesh.visible = true; b.cooldown = 2 + i * .35; b.draw = 0; b.release = -1; b.respawn = 0; this.updateBotPose(b, 0); }
     typing(target) { const e = target; return e && (e.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.tagName)); }
     onKeyDown = (e) => { if (!this.running || this.typing(e.target) || !['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space', 'KeyR', 'KeyM'].includes(e.code))
         return; e.preventDefault(); e.stopImmediatePropagation(); if (e.code === 'KeyR' && !e.repeat) {
@@ -576,10 +629,10 @@ export class BowGameRuntime {
         if (arrowId)
             this.session?.sendShot(arrowId, { x: position.x, y: position.y, z: position.z }, { x: velocity.x, y: velocity.y, z: velocity.z });
     }
-    spawnArrow(position, velocity, owner, arrowId, visualOnly = false, damage = shotDamage(1)) { this.sounds?.release(owner < 0 ? undefined : position, owner); const model = arrowModel(); model.position.copy(position); this.root.add(model); if (!this.trails) {
+    spawnArrow(position, velocity, owner, arrowId, visualOnly = false, damage = shotDamage(1), sourcePlayerId) { this.sounds?.release(owner < 0 ? undefined : position, owner); const model = arrowModel(); model.position.copy(position); this.root.add(model); if (!this.trails) {
         this.trails = new BowArrowTrails();
         this.root.add(this.trails.root);
-    } const trail = this.trails.spawn(position, this.elapsed); this.arrows.push({ mesh: model, position, velocity, owner, damage, age: 0, stuck: false, trail, arrowId, visualOnly }); if (this.arrows.length > 90) {
+    } const trail = this.trails.spawn(position, this.elapsed); this.arrows.push({ mesh: model, position, velocity, owner, damage, age: 0, stuck: false, trail, arrowId, visualOnly, sourcePlayerId }); if (this.arrows.length > 90) {
         const old = this.arrows.shift();
         this.trails.remove(old.trail);
         disposeGroup(old.mesh);
@@ -589,7 +642,7 @@ export class BowGameRuntime {
             return false;
         const start = performance.now(), frameMs = Math.max(0, deltaTime), dt = Math.min(frameMs / 1000, .08);
         const active = this.active && !this.isPaused() && !this.winner;
-        if (active) {
+        if (active && !this.testClockPaused) {
             this.accumulator += dt;
             while (this.accumulator >= 1 / 120) {
                 this.step(1 / 120);
@@ -647,6 +700,8 @@ export class BowGameRuntime {
                 const local = this.networkSnapshot?.players.find(player => player.local);
                 this.player.copy(this.session ? this.slotSpawn(local?.slot ?? 0) : this.config.playerSpawn);
                 this.velocity.set(0, 0, 0);
+                this.grounded = false;
+                this.lastWorldImpact = null;
             }
         }
         else {
@@ -654,13 +709,26 @@ export class BowGameRuntime {
             const length = Math.hypot(x, z) || 1, sprint = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) && !this.drawing;
             const speed = this.drawing ? 2.6 : sprint ? 7 : 4.5;
             const dx = (x * Math.cos(this.yaw) + z * Math.sin(this.yaw)) / length * speed * dt, dz = (-x * Math.sin(this.yaw) + z * Math.cos(this.yaw)) / length * speed * dt;
-            this.player.copy(moveWithCover(this.player, dx, dz, this.config.obstacles));
-            if (this.keys.has('Space') && this.player.y === 0)
-                this.velocity.y = 4.8;
-            this.velocity.y -= GRAVITY * dt;
-            this.player.y = Math.max(0, this.player.y + this.velocity.y * dt);
-            if (this.player.y === 0)
-                this.velocity.y = 0;
+            if (this.collision) {
+                this.velocity.x = dx / dt;
+                this.velocity.z = dz / dt;
+                if (this.keys.has('Space') && this.grounded) {
+                    this.velocity.y = 4.8;
+                    this.grounded = false;
+                }
+                this.velocity.y -= GRAVITY * dt;
+                this.grounded = this.collision.move(this.player, this.velocity, dt);
+            }
+            else {
+                // Legacy geometry-free harness callers; the hosted arena always owns a BVH.
+                this.player.copy(moveWithCover(this.player, dx, dz, this.config.obstacles));
+                if (this.keys.has('Space') && this.player.y === 0)
+                    this.velocity.y = 4.8;
+                this.velocity.y -= GRAVITY * dt;
+                this.player.y = Math.max(0, this.player.y + this.velocity.y * dt);
+                if (this.player.y === 0)
+                    this.velocity.y = 0;
+            }
             if (this.drawing)
                 this.charge = Math.min(1, this.charge + dt / BOW_DRAW_SECONDS);
         }
@@ -713,13 +781,36 @@ export class BowGameRuntime {
             if (b.release >= 1.05)
                 b.release = -1;
         }
-        const blocked = this.config.obstacles.some(c => segmentCover(origin, target, c) !== null);
+        const blocked = this.collision ? this.collision.segment(origin, target) !== null : this.config.obstacles.some(c => segmentCover(origin, target, c) !== null);
         const advance = distance > 17 ? 1 : distance < 9 ? -.8 : .05;
         const strafe = Math.sin(this.elapsed * .7 + b.phase) > .0 ? 1 : -1;
         const toward = delta.clone().setY(0).normalize(), side = new Vector3(-toward.z, 0, toward.x);
         const movement = toward.multiplyScalar(blocked ? 1 : advance).addScaledVector(side, blocked ? 1 : .7).normalize().multiplyScalar((b.draw ? 1.2 : 2.1) * dt);
         const old = b.mesh.position.clone();
-        b.mesh.position.copy(moveWithCover(old, movement.x, movement.z, this.config.obstacles, .42));
+        if (this.collision) {
+            if (b.escapeTarget) {
+                movement.copy(b.escapeTarget).sub(old).setY(0).normalize().multiplyScalar((b.draw ? 1.2 : 2.1) * dt);
+                if (old.distanceTo(b.escapeTarget) < .6)
+                    b.escapeTarget = undefined;
+            }
+            b.velocity ??= new Vector3();
+            b.velocity.x = movement.x / dt;
+            b.velocity.z = movement.z / dt;
+            b.velocity.y -= GRAVITY * dt;
+            this.collision.move(b.mesh.position, b.velocity, dt, .42);
+            b.stuckAnchor ??= old.clone();
+            b.stuckTime = (b.stuckTime ?? 0) + dt;
+            if (b.stuckTime >= 1.5) {
+                if (b.mesh.position.distanceTo(b.stuckAnchor) < .2) {
+                    const angle = Math.random() * Math.PI * 2;
+                    b.escapeTarget = old.clone().add(new Vector3(Math.cos(angle) * 4, 0, Math.sin(angle) * 4));
+                }
+                b.stuckAnchor.copy(b.mesh.position);
+                b.stuckTime = 0;
+            }
+        }
+        else
+            b.mesh.position.copy(moveWithCover(old, movement.x, movement.z, this.config.obstacles, .42));
         const walking = old.distanceTo(b.mesh.position) > dt * .2;
         b.leftLeg.rotation.x = walking ? Math.sin(this.elapsed * 7 + b.phase) * .5 : 0;
         b.rightLeg.rotation.x = -b.leftLeg.rotation.x;
@@ -756,19 +847,28 @@ export class BowGameRuntime {
             arrow.velocity.y -= GRAVITY * dt;
             const to = from.clone().addScaledVector(arrow.velocity, dt);
             let nearest = 1, victim = null, head = false, collided = false;
-            if (to.y <= .025) {
-                nearest = Math.max(0, (from.y - .025) / (from.y - to.y));
-                collided = true;
-            }
-            for (const c of this.config.obstacles) {
-                const t = segmentCover(from, to, c);
-                if (t !== null && t <= nearest) {
-                    nearest = t;
-                    victim = null;
+            if (this.collision) {
+                const hit = this.collision.segment(from, to);
+                if (hit) {
+                    nearest = hit.t;
                     collided = true;
                 }
             }
-            const candidates = arrow.visualOnly ? [] : this.session && arrow.owner < 0 ? [...this.remotePlayers.values()].map(player => ({ position: player.mesh.position, hp: player.hp, index: player.id })) : arrow.owner < 0 ? this.bots.map((b, i) => ({ position: b.mesh.position, hp: b.hp, index: i })) : [{ position: this.player, hp: this.hp, index: -1 }];
+            else {
+                if (to.y <= .025) {
+                    nearest = Math.max(0, (from.y - .025) / (from.y - to.y));
+                    collided = true;
+                }
+                for (const c of this.config.obstacles) {
+                    const t = segmentCover(from, to, c);
+                    if (t !== null && t <= nearest) {
+                        nearest = t;
+                        victim = null;
+                        collided = true;
+                    }
+                }
+            }
+            const candidates = arrow.visualOnly ? [{ position: this.player, hp: this.hp, index: -1 }, ...[...this.remotePlayers.values()].filter(p => p.id !== arrow.sourcePlayerId).map(p => ({ position: p.mesh.position, hp: p.hp, index: p.id }))] : this.session && arrow.owner < 0 ? [...this.remotePlayers.values()].map(player => ({ position: player.mesh.position, hp: player.hp, index: player.id })) : arrow.owner < 0 ? this.bots.map((b, i) => ({ position: b.mesh.position, hp: b.hp, index: i })) : [{ position: this.player, hp: this.hp, index: -1 }];
             for (const c of candidates) {
                 if (c.hp <= 0)
                     continue;
@@ -789,11 +889,17 @@ export class BowGameRuntime {
             if (!collided && arrow.owner >= 0 && !arrow.whizzed && this.sounds?.whizz(from, to))
                 arrow.whizzed = true;
             if (collided) {
+                if (victim === null)
+                    this.lastWorldImpact = arrow.position.clone();
                 this.sounds?.impact(arrow.position, head ? 'head' : victim !== null ? 'body' : 'cover');
                 this.trails?.stop(arrow.trail);
                 arrow.stuck = true;
                 arrow.age = 8;
                 if (victim !== null) {
+                    if (arrow.visualOnly) {
+                        arrow.mesh.visible = false;
+                        continue;
+                    }
                     const damage = Math.round(arrow.damage * (head ? 1.8 : 1));
                     if (typeof victim === 'string') {
                         if (head)
