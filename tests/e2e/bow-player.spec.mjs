@@ -27,6 +27,34 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   await page.getByRole('textbox', { name: 'Archer name' }).fill('Rust Hunter');
   await enter.click();
   expect(await page.evaluate(() => window.__KITE_BOW_GAME__.getState().name)).toBe('Rust Hunter');
+  const enteredPosition = await page.evaluate(() => {
+    const game = window.__KITE_BOW_GAME__.runtime;
+    const position = window.__KITE_BOW_GAME__.getState().player.position;
+    game.collisionTest({ position: [position.x, position.y, position.z] });
+
+    return position;
+  });
+  await page.keyboard.down('Space');
+  const immediateJump = await page.evaluate(() =>
+    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }),
+  );
+  await page.keyboard.up('Space');
+  expect(immediateJump.position[1]).toBeGreaterThan(enteredPosition.y);
+  await page.evaluate((position) => {
+    window.__KITE_BOW_GAME__.runtime.collisionTest({
+      position: [position.x, position.y, position.z],
+    });
+  }, enteredPosition);
+  await page.keyboard.down('w');
+  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }));
+  await page.keyboard.down('Space');
+  const walkingJump = await page.evaluate(() =>
+    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }),
+  );
+  await page.keyboard.up('Space');
+  await page.keyboard.up('w');
+  expect(walkingJump.position[1]).toBeGreaterThan(enteredPosition.y);
+  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ resume: true }));
   await page.waitForTimeout(3500);
   const hud = page.locator('#kite3d-bow-game-hud');
   await expect(hud.locator('[data-hud="modal"]')).toBeHidden();

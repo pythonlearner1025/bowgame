@@ -228,6 +228,16 @@ const MAX_DEATH_FEED_ENTRIES = 4;
 // Health below thirty-five percent changes to rust as an urgent survival cue.
 const LOW_HEALTH_THRESHOLD = 35;
 
+// Physics advances at 120 Hz so collision and coyote timing remain deterministic.
+const FIXED_STEPS_PER_SECOND = 120;
+const FIXED_STEP_SECONDS = 1 / FIXED_STEPS_PER_SECOND;
+
+// Ground support remains jumpable for one tenth of a second after an edge departure.
+const COYOTE_WINDOW_SECONDS = 0.1;
+
+// The original 4.8-meter-per-second impulse preserves the established jump arc.
+const JUMP_SPEED_METERS_PER_SECOND = 4.8;
+
 interface MeshOptions {
   x?: number;
   y?: number;
@@ -335,6 +345,7 @@ export class BowGameRuntime {
   private lifecycle = 0;
   private collision: BowCollision | null = null;
   private grounded = false;
+  private coyoteSecondsRemaining = 0;
   private testClockPaused = false;
   private lastWorldImpact: Vector3 | null = null;
   private preview: {
@@ -849,6 +860,7 @@ export class BowGameRuntime {
       this.player.fromArray(action.position);
       this.velocity.set(0, 0, 0);
       this.grounded = false;
+      this.coyoteSecondsRemaining = 0;
       this.lastWorldImpact = null;
       this.hp = 100;
     }
@@ -867,7 +879,7 @@ export class BowGameRuntime {
     }
 
     for (let i = 0; i < Math.min(1200, action.steps ?? 0); i++) {
-      this.step(1 / 120);
+      this.step(FIXED_STEP_SECONDS);
     }
 
     if (action.resume) {
@@ -1075,6 +1087,7 @@ export class BowGameRuntime {
         this.player.copy(this.slotSpawn(own.slot));
         this.velocity.set(0, 0, 0);
         this.grounded = false;
+        this.coyoteSecondsRemaining = 0;
         this.lastWorldImpact = null;
         this.hp = 100;
       }
@@ -1174,6 +1187,7 @@ export class BowGameRuntime {
     this.player.copy(this.slotSpawn(local?.slot ?? 0));
     this.velocity.set(0, 0, 0);
     this.grounded = false;
+    this.coyoteSecondsRemaining = 0;
     this.lastWorldImpact = null;
     this.drawing = false;
     this.charge = 0;
@@ -1262,6 +1276,7 @@ export class BowGameRuntime {
     this.pitch = 0;
     this.velocity.set(0, 0, 0);
     this.grounded = false;
+    this.coyoteSecondsRemaining = 0;
     this.lastWorldImpact = null;
     this.drawing = false;
     this.charge = 0;
@@ -1616,9 +1631,9 @@ export class BowGameRuntime {
     if (active && !this.testClockPaused) {
       this.accumulator += dt;
 
-      while (this.accumulator >= 1 / 120) {
-        this.step(1 / 120);
-        this.accumulator -= 1 / 120;
+      while (this.accumulator >= FIXED_STEP_SECONDS) {
+        this.step(FIXED_STEP_SECONDS);
+        this.accumulator -= FIXED_STEP_SECONDS;
       }
     }
 
@@ -1707,6 +1722,7 @@ export class BowGameRuntime {
         );
         this.velocity.set(0, 0, 0);
         this.grounded = false;
+        this.coyoteSecondsRemaining = 0;
         this.lastWorldImpact = null;
       }
     } else {
@@ -1734,18 +1750,34 @@ export class BowGameRuntime {
         this.velocity.x = dx / dt;
         this.velocity.z = dz / dt;
 
-        if (this.keys.has('Space') && this.grounded) {
-          this.velocity.y = 4.8;
+        const hasSupport = this.collision.hasSupport(this.player);
+        const isSupported = hasSupport && this.velocity.y <= 0;
+
+        if (isSupported) {
+          this.grounded = true;
+          this.coyoteSecondsRemaining = COYOTE_WINDOW_SECONDS;
+        } else {
           this.grounded = false;
+          this.coyoteSecondsRemaining = Math.max(0, this.coyoteSecondsRemaining - dt);
+        }
+
+        if (this.keys.has('Space') && this.coyoteSecondsRemaining > 0) {
+          this.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
+          this.grounded = false;
+          this.coyoteSecondsRemaining = 0;
         }
 
         this.velocity.y -= GRAVITY * dt;
         this.grounded = this.collision.move(this.player, this.velocity, dt);
+
+        if (this.grounded) {
+          this.coyoteSecondsRemaining = COYOTE_WINDOW_SECONDS;
+        }
       } else {
         // Legacy geometry-free harness callers; the hosted arena always owns a BVH.
         this.player.copy(moveWithCover(this.player, dx, dz, this.requiredConfig.obstacles));
         if (this.keys.has('Space') && this.player.y === 0) {
-          this.velocity.y = 4.8;
+          this.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
         }
 
         this.velocity.y -= GRAVITY * dt;

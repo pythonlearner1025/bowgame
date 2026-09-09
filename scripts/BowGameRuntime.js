@@ -22,6 +22,13 @@ const DEATH_FEED_DURATION_SECONDS = 8;
 const MAX_DEATH_FEED_ENTRIES = 4;
 // Health below thirty-five percent changes to rust as an urgent survival cue.
 const LOW_HEALTH_THRESHOLD = 35;
+// Physics advances at 120 Hz so collision and coyote timing remain deterministic.
+const FIXED_STEPS_PER_SECOND = 120;
+const FIXED_STEP_SECONDS = 1 / FIXED_STEPS_PER_SECOND;
+// Ground support remains jumpable for one tenth of a second after an edge departure.
+const COYOTE_WINDOW_SECONDS = 0.1;
+// The original 4.8-meter-per-second impulse preserves the established jump arc.
+const JUMP_SPEED_METERS_PER_SECOND = 4.8;
 function mesh(geometry, material, parent, options = {}) {
     const renderedMesh = new Mesh(geometry, material);
     renderedMesh.position.set(options.x ?? 0, options.y ?? 0, options.z ?? 0);
@@ -94,6 +101,7 @@ export class BowGameRuntime {
     lifecycle = 0;
     collision = null;
     grounded = false;
+    coyoteSecondsRemaining = 0;
     testClockPaused = false;
     lastWorldImpact = null;
     preview = null;
@@ -538,6 +546,7 @@ export class BowGameRuntime {
             this.player.fromArray(action.position);
             this.velocity.set(0, 0, 0);
             this.grounded = false;
+            this.coyoteSecondsRemaining = 0;
             this.lastWorldImpact = null;
             this.hp = 100;
         }
@@ -549,7 +558,7 @@ export class BowGameRuntime {
             this.spawnArrow(new Vector3().fromArray(fire.origin), new Vector3().fromArray(fire.direction).normalize().multiplyScalar(shotSpeed(1)), { owner: -1, isVisualOnly: Boolean(fire.remote) });
         }
         for (let i = 0; i < Math.min(1200, action.steps ?? 0); i++) {
-            this.step(1 / 120);
+            this.step(FIXED_STEP_SECONDS);
         }
         if (action.resume) {
             this.testClockPaused = false;
@@ -731,6 +740,7 @@ export class BowGameRuntime {
                 this.player.copy(this.slotSpawn(own.slot));
                 this.velocity.set(0, 0, 0);
                 this.grounded = false;
+                this.coyoteSecondsRemaining = 0;
                 this.lastWorldImpact = null;
                 this.hp = 100;
             }
@@ -808,6 +818,7 @@ export class BowGameRuntime {
         this.player.copy(this.slotSpawn(local?.slot ?? 0));
         this.velocity.set(0, 0, 0);
         this.grounded = false;
+        this.coyoteSecondsRemaining = 0;
         this.lastWorldImpact = null;
         this.drawing = false;
         this.charge = 0;
@@ -874,6 +885,7 @@ export class BowGameRuntime {
         this.pitch = 0;
         this.velocity.set(0, 0, 0);
         this.grounded = false;
+        this.coyoteSecondsRemaining = 0;
         this.lastWorldImpact = null;
         this.drawing = false;
         this.charge = 0;
@@ -1184,9 +1196,9 @@ export class BowGameRuntime {
         const active = this.active && !this.isPaused() && !this.winner;
         if (active && !this.testClockPaused) {
             this.accumulator += dt;
-            while (this.accumulator >= 1 / 120) {
-                this.step(1 / 120);
-                this.accumulator -= 1 / 120;
+            while (this.accumulator >= FIXED_STEP_SECONDS) {
+                this.step(FIXED_STEP_SECONDS);
+                this.accumulator -= FIXED_STEP_SECONDS;
             }
         }
         for (const bot of this.bots) {
@@ -1253,6 +1265,7 @@ export class BowGameRuntime {
                 this.player.copy(this.session ? this.slotSpawn(local?.slot ?? 0) : this.requiredConfig.playerSpawn);
                 this.velocity.set(0, 0, 0);
                 this.grounded = false;
+                this.coyoteSecondsRemaining = 0;
                 this.lastWorldImpact = null;
             }
         }
@@ -1274,18 +1287,32 @@ export class BowGameRuntime {
             if (this.collision) {
                 this.velocity.x = dx / dt;
                 this.velocity.z = dz / dt;
-                if (this.keys.has('Space') && this.grounded) {
-                    this.velocity.y = 4.8;
+                const hasSupport = this.collision.hasSupport(this.player);
+                const isSupported = hasSupport && this.velocity.y <= 0;
+                if (isSupported) {
+                    this.grounded = true;
+                    this.coyoteSecondsRemaining = COYOTE_WINDOW_SECONDS;
+                }
+                else {
                     this.grounded = false;
+                    this.coyoteSecondsRemaining = Math.max(0, this.coyoteSecondsRemaining - dt);
+                }
+                if (this.keys.has('Space') && this.coyoteSecondsRemaining > 0) {
+                    this.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
+                    this.grounded = false;
+                    this.coyoteSecondsRemaining = 0;
                 }
                 this.velocity.y -= GRAVITY * dt;
                 this.grounded = this.collision.move(this.player, this.velocity, dt);
+                if (this.grounded) {
+                    this.coyoteSecondsRemaining = COYOTE_WINDOW_SECONDS;
+                }
             }
             else {
                 // Legacy geometry-free harness callers; the hosted arena always owns a BVH.
                 this.player.copy(moveWithCover(this.player, dx, dz, this.requiredConfig.obstacles));
                 if (this.keys.has('Space') && this.player.y === 0) {
-                    this.velocity.y = 4.8;
+                    this.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
                 }
                 this.velocity.y -= GRAVITY * dt;
                 this.player.y = Math.max(0, this.player.y + this.velocity.y * dt);

@@ -28,6 +28,8 @@ const SEGMENT_EPSILON_METERS = 1e-10;
 const CONTACT_NORMAL_EPSILON_METERS = 1e-9;
 // This upward-velocity tolerance preserves support during tiny solver corrections.
 const GROUNDED_VERTICAL_SPEED_TOLERANCE = 0.01;
+// A two-centimeter downward probe bridges collision skin and small fixed-step separation.
+const SUPPORT_QUERY_DISTANCE_METERS = 0.02;
 // Normals this close to vertical need no steep-face horizontal projection.
 const VERTICAL_NORMAL_Y_LIMIT = 0.999;
 // Spawn recovery samples quarter-meter rings out to four meters.
@@ -111,6 +113,8 @@ export class BowCollision {
     segmentRay = new Ray();
     capsuleAxisRay = new Ray(new Vector3(), new Vector3(0, 1, 0));
     segmentDirection = new Vector3();
+    supportFeet = new Vector3();
+    supportVelocity = new Vector3();
     steps = 0;
     totalMs = 0;
     maxMs = 0;
@@ -216,6 +220,19 @@ export class BowCollision {
             }
         }
         return isGrounded;
+    }
+    /**
+     * Tests for nearby walkable support beneath a stationary capsule without moving caller state.
+     *
+     * @param feet - Capsule-foot position in world meters.
+     * @param radius - Capsule radius in meters.
+     * @returns Whether a walkable surface lies within the downward support distance.
+     */
+    hasSupport(feet, radius = PLAYER_RADIUS) {
+        this.supportFeet.copy(feet);
+        this.supportFeet.y -= SUPPORT_QUERY_DISTANCE_METERS;
+        this.supportVelocity.set(0, 0, 0);
+        return this.resolve(this.supportFeet, this.supportVelocity, radius);
     }
     // Resolves all triangles overlapping the capsule during one projection pass.
     resolvePass(feet, velocity, radius) {
