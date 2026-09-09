@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {build} from 'esbuild';
+const bundled=await build({entryPoints:[new URL('../src/utils/ai/BowPhysics.ts',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'node'});
+const {shotSpeed,shotDamage,segmentSphere,segmentCover,moveWithCover,GRAVITY}=await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
+test('draw scales velocity and lethal headshots without unbounded charge',()=>{assert.equal(shotSpeed(0),18);assert.equal(shotSpeed(1),56);assert.equal(shotSpeed(2),56);assert.equal(shotDamage(1),70);assert.equal(shotDamage(1,true),126);});
+test('fast arrow swept collision hits a target between frame endpoints',()=>{const t=segmentSphere({x:0,y:1,z:0},{x:0,y:1,z:-12},{x:0,y:1,z:-6},.4);assert.ok(t>0&&t<1);assert.equal(segmentSphere({x:0,y:1,z:0},{x:0,y:1,z:-12},{x:2,y:1,z:-6},.4),null);});
+test('cover blocks an arrow before the target but allows shooting over it',()=>{const a={x:0,y:1,z:0},b={x:0,y:1,z:-10},c={x:0,z:-3,r:1,height:2};assert.ok(segmentCover(a,b,c)<segmentSphere(a,b,{x:0,y:1,z:-7},.4));assert.equal(segmentCover({...a,y:3},{...b,y:3},c),null);assert.equal(segmentCover({x:0,y:3,z:-3},{x:0,y:1,z:-3},c),.5);});
+test('movement slides out of cover and respects arena boundary',()=>{const p=moveWithCover({x:0,y:0,z:0},1,0,[{x:1,z:0,r:1,height:2}]);assert.ok(Math.hypot(p.x-1,p.z)>=1.379);const edge=moveWithCover({x:26,y:0,z:0},4,0,[]);assert.equal(edge.x,27);});
+test('ballistic drop and swept impact resolve a full-charge hit at 20m',()=>{let p={x:0,y:1.6,z:0},v={x:0,y:GRAVITY*.5*(20/56),z:-56};let hit=false;for(let i=0;i<60;i++){v.y-=GRAVITY/120;const q={x:0,y:p.y+v.y/120,z:p.z+v.z/120};if(segmentSphere(p,q,{x:0,y:1.6,z:-20},.24)!==null)hit=true;p=q;}assert.ok(hit);assert.ok(p.y<1.6);});

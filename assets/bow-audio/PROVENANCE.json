@@ -1,0 +1,107 @@
+{
+  "method": "CC0 public high-quality preview MP3 decoded and processed; original downloadable WAV requires login and was not accessed. Source recording descriptions are authoritative; crop event identification is a waveform/spectral inference without subjective audition.",
+  "sources": [
+    {
+      "kind": "release",
+      "source": "release",
+      "filename": "release-recorded.wav",
+      "trim": [
+        0.205,
+        0.43
+      ],
+      "highpass": 75,
+      "lowpass": 4200,
+      "attack": 0.008,
+      "decay": 0.055,
+      "gain": 0.72,
+      "softknee": 0.38,
+      "author": "Ali_6868",
+      "soundId": 384915,
+      "title": "Bow Release (Bow and Arrow)",
+      "url": "https://freesound.org/people/Ali_6868/sounds/384915/",
+      "preview": "https://cdn.freesound.org/previews/384/384915_984733-hq.mp3",
+      "date": "2017-03-20",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "retrieved": "2026-09-08",
+      "sourceOriginalLocal": "/tmp/kite3d-real-bow-audio/release-original-preview.mp3",
+      "sourceSha256": "ece6c098cb7a03438b494a3f3e2bdd8b629fe26555d5b39f1933d78731b13fbf",
+      "sourcePageSha256": "50bf07c3e53e4c44191bbce39517c92e7745ecebff8bbf1dae5b8e305d97e5cf",
+      "sourceStats": {
+        "durationSeconds": 0.75,
+        "peak": 0.45652109384536743,
+        "rms": 0.04542646851598072,
+        "mean": -1.2159360505634757e-05
+      },
+      "cropStats": {
+        "durationSeconds": 0.225,
+        "peak": 0.45652109384536743,
+        "rms": 0.0829357315119439,
+        "mean": -4.242560893134832e-05
+      },
+      "processedStats": {
+        "durationSeconds": 0.225,
+        "peak": 0.16727304457459174,
+        "rms": 0.02728078966228257,
+        "mean": -4.262766222529678e-05
+      },
+      "outputSha256": "2cc39db46946086deebd40cba00d5c4556812483a56eb28f0cc59fa093918ab2",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitDepth": 16,
+      "observedLicenseLabel": "Creative Commons 0",
+      "authorRecordingDescriptionSummary": "Bow release recorded for a university project."
+    },
+    {
+      "kind": "whizz",
+      "source": "flyby",
+      "filename": "whizz-recorded.wav",
+      "trim": [
+        0.11,
+        0.245
+      ],
+      "highpass": 350,
+      "lowpass": 4500,
+      "attack": 0.018,
+      "decay": 0.035,
+      "gain": 1,
+      "softknee": 0.08,
+      "author": "saturdaysoundguy",
+      "soundId": 394180,
+      "title": "Arrow Loose and Flyby",
+      "url": "https://freesound.org/people/saturdaysoundguy/sounds/394180/",
+      "preview": "https://cdn.freesound.org/previews/394/394180_7280678-hq.mp3",
+      "date": "2017-05-28",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "retrieved": "2026-09-08",
+      "sourceOriginalLocal": "/tmp/kite3d-real-bow-audio/flyby-original-preview.mp3",
+      "sourceSha256": "0ff3ad91f9a6b3018dc0260ffeeff5b29a99d03ab893ac7c4b3e5f72de484e56",
+      "sourcePageSha256": "eda455ed9304a30c84839154cd2d39c23f41fb837b4fe6d261ec550ed2bfc44c",
+      "sourceStats": {
+        "durationSeconds": 0.6426666666666667,
+        "peak": 0.4499710202217102,
+        "rms": 0.01249665393189817,
+        "mean": -4.8072012551319105e-06
+      },
+      "cropStats": {
+        "durationSeconds": 0.135,
+        "peak": 0.04900401458144188,
+        "rms": 0.010413987788305065,
+        "mean": -0.00020227679432706242
+      },
+      "processedStats": {
+        "durationSeconds": 0.135,
+        "peak": 0.03561765481381895,
+        "rms": 0.007586786022692645,
+        "mean": 1.4252229991268235e-06
+      },
+      "outputSha256": "b50eda446b72cecb6ecbd82c0007c9e344a3656fc925b7ccd2cd4dda24797951",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitDepth": 16,
+      "observedLicenseLabel": "Creative Commons 0",
+      "authorRecordingDescriptionSummary": "Release and arrow passing the microphone, recorded with Zoom F4 and Rode NTG-3; author applied EQ and cleaning."
+    }
+  ]
+}

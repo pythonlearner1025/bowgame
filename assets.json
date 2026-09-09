@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "files": {
+    "bow-audio/LICENSES.md": {"path": "assets/bow-audio/LICENSES.md", "sha256": "29136a39d03d3ca48a8cb578e3e86926b3706ebe11217edcce4725ca74dd5df5", "mime": "text/markdown"},
+    "bow-audio/PROVENANCE.json": {"path": "assets/bow-audio/PROVENANCE.json", "sha256": "f26f763b9611cfc60f800dafb044e1d9f2446e98e813632b0272568a0830e547", "mime": "application/json"},
+    "bow-audio/PROVENANCE.md": {"path": "assets/bow-audio/PROVENANCE.md", "sha256": "6c79c6dc801591c1f26baf7ecedce6fa6da469f1566f5adb6a814cdb1591d1fd", "mime": "text/markdown"},
+    "bow-audio/processing-waveforms.png": {"path": "assets/bow-audio/processing-waveforms.png", "sha256": "52b0b89a2ea7370da42cc20ba1d6a170ddc24ae3da7310f6cb3fa86a24f3553b", "mime": "image/png"},
+    "bow-audio/release-recorded.wav": {"path": "assets/bow-audio/release-recorded.wav", "sha256": "2cc39db46946086deebd40cba00d5c4556812483a56eb28f0cc59fa093918ab2", "mime": "audio/wav"},
+    "bow-audio/whizz-recorded.wav": {"path": "assets/bow-audio/whizz-recorded.wav", "sha256": "b50eda446b72cecb6ecbd82c0007c9e344a3656fc925b7ccd2cd4dda24797951", "mime": "audio/wav"},
+    "bow-survivor/LICENSE.CC0.md": {"path": "assets/bow-survivor/LICENSE.CC0.md", "sha256": "f6089cba01cb570a24712b41ab8a586ccd3cc5ef53dc266ca50b95c288956d2c", "mime": "text/markdown"},
+    "bow-survivor/PROVENANCE.md": {"path": "assets/bow-survivor/PROVENANCE.md", "sha256": "76dcfcbd27f712c6603099821e8c8bfd85bc907ad5d34ac4d5fd629d08fc37be", "mime": "text/markdown"},
+    "bow-survivor/eyes-brown.png": {"path": "assets/bow-survivor/eyes-brown.png", "sha256": "4659691c7295ad6206c78b003e5fd0e5f91dcd53032fa914a229bb48cabe424b", "mime": "image/png"},
+    "bow-survivor/male-adult-rigged.json": {"path": "assets/bow-survivor/male-adult-rigged.json", "sha256": "67d4d6fa8e134f0e703182954b817b99ff52f592225a3818b12613a44a1f1951", "mime": "application/json"},
+    "bow-survivor/skin-male.png": {"path": "assets/bow-survivor/skin-male.png", "sha256": "03efe1f6b0ae52429649dcefc9dcaef6058032f874a251169cc3e2ed473c3874", "mime": "image/png"}
+  }
+}

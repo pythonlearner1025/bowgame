@@ -1,0 +1,45 @@
+{
+  "name": "kite3d-bow-deathmatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Kite3D Timber / Ash bow deathmatch project",
+  "type": "module",
+  "mainScene": "assets/main.scene.glb",
+  "main": "./main.js",
+  "scripts": {
+    "compile:scripts": "tsc -p tsconfig.scripts.json && node tools/verify-scripts.mjs",
+    "test": "npm run compile:scripts && node --test tests/bow-*.test.mjs",
+    "build": "npm run compile:scripts && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "e2e": "npm run build && playwright test --config tests/e2e/playwright.config.mjs"
+  },
+  "keywords": [
+    "3d",
+    "game",
+    "threepipe",
+    "kite3d"
+  ],
+  "dependencies": {
+    "threepipe": "file:/private/tmp/kite3d/threepipe"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  },
+  "kite": {
+    "scripts": [
+      "./scripts/BowGameComponent.script.js"
+    ],
+    "viewer": {
+      "msaa": true
+    },
+    "enginePin": {
+      "package": "threepipe",
+      "version": "0.5.1",
+      "commit": "52c3ec1730463d935a582cf999c3eecb0ac63c14",
+      "source": "file:/private/tmp/kite3d/threepipe"
+    }
+  }
+}
