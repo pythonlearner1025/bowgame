@@ -2,6 +2,10 @@
 
 Standalone Kite3D project for the local bow deathmatch. It uses Threepipe 0.5.1 from the clean checkout at `/private/tmp/kite3d/threepipe`; it does not depend on editor internals or a CDN.
 
+## Play online
+
+The deployed game is **https://bowgame.minjunesv0.workers.dev**. The hosted page joins the one `main` room automatically; edit the generated `Archer-####` name on the **ENTER ARENA** overlay, then enter. Up to 10 friends can play, the first player to 20 kills wins, and the next round starts about five seconds later. Add `?solo=1` to the live URL to force the original three-bot, first-to-10 game.
+
 ## Setup and run
 
 Build the pinned engine without invoking its optional all-plugin `prepare` build:
@@ -32,6 +36,28 @@ npm run e2e
 ```
 
 Playwright is pinned to 1.62.1 because it matches cached Chromium revision 1234. `npm run e2e` uses software WebGL and writes [solo-arena.png](evidence/solo-arena.png) plus [e2e-run.json](evidence/e2e-run.json).
+
+## Run online locally
+
+Build the static player, then run the Worker and SQLite-backed Durable Object locally:
+
+```sh
+npm run build
+npx wrangler dev
+```
+
+Open `http://localhost:8787/?online=1`. Use `?solo=1` to force solo mode. The full online test chooses a free port, starts and stops `wrangler dev`, opens two cached headless Chromium pages, and also probes the 10-player cap and round reset:
+
+```sh
+npm run e2e:online
+```
+
+To deploy the static build and room relay to the configured Cloudflare account:
+
+```sh
+npm run build
+npx wrangler deploy
+```
 
 ## Open in the Kite3D editor
 

@@ -1,5 +1,7 @@
-export const ROOM_CAP=10;
-export const SCORE_LIMIT=20;
+import {BOW_ROOM_CAP,BOW_SCORE_LIMIT} from '../src/BowProtocol.js';
+
+export const ROOM_CAP=BOW_ROOM_CAP;
+export const SCORE_LIMIT=BOW_SCORE_LIMIT;
 
 export interface RoomPlayer {id:string;name:string;slot:number;kills:number}
 export interface DeathResult {accepted:boolean;scores:Record<string,number>;winnerId:string|null}

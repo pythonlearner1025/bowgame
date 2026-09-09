@@ -1,4 +1,6 @@
 export const BOW_PROTOCOL_VERSION = 1;
+export const BOW_ROOM_CAP = 10;
+export const BOW_SCORE_LIMIT = 20;
 const object = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
 const vector = (value) => object(value) && finite(value.x) && finite(value.y) && finite(value.z);

@@ -1,15 +1,15 @@
 {
   "mode": "local",
-  "baseURL": "http://127.0.0.1:60774",
+  "baseURL": "http://127.0.0.1:61540",
   "roster": [
     {
-      "id": "5f3786e3-956d-4ad7-a78b-430f6460e066",
+      "id": "0faa6980-28c1-44cb-86e0-5abe34442b6c",
       "name": "Archer-A",
       "slot": 0,
       "local": true
     },
     {
-      "id": "d0d58c01-34cc-4170-a12f-0fc3fc9ca475",
+      "id": "4d659181-8567-456a-bd03-62517c3f407d",
       "name": "Archer-B",
       "slot": 1,
       "local": false
@@ -20,11 +20,12 @@
     1
   ],
   "scoresBefore": {
-    "5f3786e3-956d-4ad7-a78b-430f6460e066": 0
+    "0faa6980-28c1-44cb-86e0-5abe34442b6c": 0,
+    "4d659181-8567-456a-bd03-62517c3f407d": 0
   },
   "scoresAfter": {
-    "d0d58c01-34cc-4170-a12f-0fc3fc9ca475": 0,
-    "5f3786e3-956d-4ad7-a78b-430f6460e066": 1
+    "4d659181-8567-456a-bd03-62517c3f407d": 0,
+    "0faa6980-28c1-44cb-86e0-5abe34442b6c": 1
   },
   "victimHealthAfter": 0,
   "latencyMs": 0.40000009536743164,
@@ -33,13 +34,13 @@
     "eleventhRejected": true
   },
   "round": {
-    "winnerId": "dba9851b-38d4-4457-968b-999e6b04d07f",
+    "winnerId": "03a86d2f-a9ad-4387-b4a0-ec4a7d409552",
     "scores": {
-      "0e742bd1-afbe-42bf-9c4c-f1607491c312": 0,
-      "dba9851b-38d4-4457-968b-999e6b04d07f": 20
+      "2dee67cd-ffea-487b-8fdc-6cae128e8b52": 0,
+      "03a86d2f-a9ad-4387-b4a0-ec4a7d409552": 20
     },
     "resetRound": 2,
-    "resetDelayMs": 5012
+    "resetDelayMs": 5023
   },
   "consoleErrors": []
 }

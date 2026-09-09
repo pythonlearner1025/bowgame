@@ -54,6 +54,43 @@ The provenance documents and processing image remain in the project but are not 
 - Clean Threepipe reports draw/triangle counters per its public post-render state; the old cross-pass `autoReset=false` profiling technique is incompatible with 0.5.1.
 - The project dependency is intentionally pinned to an absolute clean-checkout path for this requested environment.
 
-## Multiplayer: not yet
+## Multiplayer slice
 
-This port is local-only. No transport, synchronization, lobby, authority, persistence, or remote player behavior has been added.
+This repository now adds one deliberately narrow online mode around the standalone game. The same `player/main.ts` entrypoint chooses online mode on `*.workers.dev` or with `?online=1`; `?solo=1` always selects the unchanged bot mode. Online mode uses one Cloudflare Worker for the static `dist/` build and `/ws`, plus one SQLite-backed `BowRoom` Durable Object instance named `main`. There is no second backend.
+
+`BowTransport.ts` is the small `connect` / `send` / `onMessage` / `close` boundary, with `WebSocketTransport` as its first implementation. `BowNetSession.ts` owns the local player slot, remote slots keyed by player ID, scores, round, connection state, heartbeat, RTT, and reconnect backoff. `BowGameRuntime` consumes that session independently of the transport. Remote slots render the existing `BowHumanAsset`/`BowVisuals` human and bow rig, interpolate the relayed transform/draw animation, and never run bot AI. Online bots are disabled because unsynchronized local AI would create different opponents and scores for every client.
+
+### Version 1 protocol
+
+Every frame is JSON text with `v: 1`. State is sent at 20 Hz; ping runs every 20 seconds.
+
+| Direction | Message | Payload / behavior |
+|---|---|---|
+| client → server | `join` | `name`; changes the attachment-backed display name. |
+| client → server | `state` | `seq`, `pos`, `yaw`, `pitch`, `draw`, `anim`; relayed to peers. |
+| client → server | `shot` | `arrowId`, `origin`, `velocity`; peers spawn a visual-only ballistic arrow and trail. |
+| client → server | `hit` | `targetId`, `arrowId`, `damage`, `head`; relayed to the victim. |
+| client → server | `death` | `killerId`; the only message that changes the Durable Object kill tally. |
+| client → server | `ping` | `sentAt`; echoed as `pong` for RTT. |
+| server → client | `welcome` | `playerId`, ordered `roster` slots, `scores`, `scoreLimit: 20`, `round`. |
+| server → client | `join`, `leave` | Adds, renames, or removes a player slot. |
+| server → client | `state`, `shot`, `hit` | Relayed sender data with a server-supplied `playerId`. |
+| server → client | `death`, `scores` | Announces the victim/killer and the authoritative round kill map. |
+| server → client | `round_end` | `winnerId`, `scores` when a player reaches 20 kills. |
+| server → client | `round_reset` | New `round` after about five seconds; clients restore health, respawn, and clear arrows. |
+| server → client | `full` | Rejects an 11th connection; the client offers a solo-mode button. |
+| server → client | `pong` | Echoed `sentAt` used to display latency as RTT. |
+
+### Trust model and limits
+
+Health is victim-authoritative. A shooter simulates its own arrow with the existing gravity, swept collision, cover, and head/body capsules, then reports `hit`. The target applies the reported damage locally; on death it reports `death{killerId}` and follows the existing automatic respawn timing. The Durable Object never simulates shots or validates aim, damage, position, fire rate, or deaths. Friends can therefore cheat by sending fabricated state, hits, or deaths, modifying damage, teleporting, or suppressing their own death report. This is intentional for the trusted-friends slice and is not safe for competitive or public play.
+
+The deployed service has one room, at most 10 concurrent players, a fixed 20-kill round, no accounts, no matchmaking, no persistence, no server authority, no lag compensation, no chat, and no bots online. Scores and connection attachments exist only for live sockets; a deployment, runtime shutdown, or empty room can discard them. The HUD's latency number is WebSocket round-trip time, not one-way latency. Hibernation attachments restore live socket identity/name/score after a Durable Object wake, and a Durable Object alarm performs the delayed round reset.
+
+SQLite-backed Durable Objects are available on Cloudflare's Workers Free plan. Normal Workers, Durable Object request/duration, storage, and static-asset allowances still apply, can change, and should be checked against Cloudflare's current pricing before broader use. This slice writes no score or account records; SQLite class selection is used to make the Durable Object eligible for the Free plan, while storage is used only for its reset alarm.
+
+### Operations
+
+Build and deploy from `/private/tmp/bowgame` with `npm run build && npx wrangler deploy`. The current live route is `https://bowgame.minjunesv0.workers.dev`. Roll back to the preceding deployment with `npx wrangler rollback`; in an emergency, remove the Worker and its route with `npx wrangler delete`. These commands affect the configured account `53a144fad4e15ca51c32da9b9fe25d4a`.
+
+The player cap and score limit are centralized as `BOW_ROOM_CAP` and `BOW_SCORE_LIMIT` in `src/BowProtocol.ts`; change them there, run `npm test`, `npm run e2e:online`, rebuild, and deploy. `wrangler.jsonc` pins the Worker name, account, static assets, `BOW_ROOM` binding, SQLite migration, current compatibility date, and observability.

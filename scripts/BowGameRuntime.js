@@ -9,6 +9,7 @@ import { batchBowScene } from './BowSceneBatch.js';
 import { BowAudio } from './BowAudio.js';
 import { BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover } from './BowPhysics.js';
 import { BowNetSession } from './BowNetSession.js';
+import { BOW_ROOM_CAP } from './BowProtocol.js';
 const MAT = (color, metalness = 0) => new MeshStandardMaterial({ color, roughness: 0.85, metalness });
 function mesh(geometry, material, parent, x = 0, y = 0, z = 0) { const m = new Mesh(geometry, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; }
 function stick(parent, a, b, r, material) { const m = mesh(new CylinderGeometry(r, r, a.distanceTo(b), 8), material, parent); m.position.copy(a).add(b).multiplyScalar(.5); m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), b.clone().sub(a).normalize()); return m; }
@@ -1026,7 +1027,7 @@ export class BowGameRuntime {
             const players = snapshot?.players ?? [];
             this.hud.board.textContent = [...players].sort((a, b) => a.slot - b.slot).map(player => `${player.local ? 'YOU' : player.name}    ${snapshot?.scores[player.id] ?? 0} K / ${player.deaths} D`).join('\n');
             const latency = snapshot?.latencyMs === null || snapshot?.latencyMs === undefined ? '' : ` · ${Math.round(snapshot.latencyMs)} MS RTT`;
-            this.hud.network.textContent = `ONLINE · ${(snapshot?.status ?? 'connecting').toUpperCase()} · ${players.length}/10 PLAYERS${latency} · ROUND ${snapshot?.round ?? 1} · FIRST TO ${limit}`;
+            this.hud.network.textContent = `ONLINE · ${(snapshot?.status ?? 'connecting').toUpperCase()} · ${players.length}/${BOW_ROOM_CAP} PLAYERS${latency} · ROUND ${snapshot?.round ?? 1} · FIRST TO ${limit}`;
         }
         else
             this.hud.board.textContent = this.bots.map(b => `${b.name}    ${b.kills} K / ${b.deaths} D`).join('\n');
@@ -1049,7 +1050,7 @@ export class BowGameRuntime {
         this.hud.sub.textContent = 'BOW DEATHMATCH · ONLINE · NO BOTS';
         this.hud.modal.style.display = show ? 'block' : 'none';
         this.hud.title.textContent = status === 'full' ? 'SERVER FULL' : this.winner ? this.winner === 'YOU' ? 'VICTORY' : 'ROUND OVER' : 'TIMBER / ASH';
-        this.hud.description.textContent = status === 'full' ? 'The main room already has 10 archers.\nTry again later or continue in solo mode.' : status === 'reconnecting' || status === 'disconnected' ? 'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.' : status === 'connecting' ? 'Connecting to the main room…' : this.winner ? `${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.` : `${snapshot?.players.length ?? 0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`;
+        this.hud.description.textContent = status === 'full' ? `The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.` : status === 'reconnecting' || status === 'disconnected' ? 'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.' : status === 'connecting' ? 'Connecting to the main room…' : this.winner ? `${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.` : `${snapshot?.players.length ?? 0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`;
         const button = this.hud.button;
         button.disabled = blocked || !!this.winner;
         button.style.opacity = button.disabled ? '.55' : '1';

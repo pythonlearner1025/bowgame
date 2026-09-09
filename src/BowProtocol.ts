@@ -1,4 +1,6 @@
 export const BOW_PROTOCOL_VERSION=1 as const;
+export const BOW_ROOM_CAP=10;
+export const BOW_SCORE_LIMIT=20;
 
 export interface NetVector3 {x:number;y:number;z:number}
 export type PlayerAnim='ready'|'walk'|'draw'|'release'|'dead';
