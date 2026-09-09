@@ -112,8 +112,8 @@ test('two Chromium pages play, room limits hold, and rounds reset', async ({ bro
 
   await pageB.evaluate(() => {
     const runtime = window.__KITE_BOW_GAME__.runtime;
-    runtime.player.set(0, 0, 10);
-    runtime.yaw = Math.PI;
+    runtime.state.player.set(0, 0, 10);
+    runtime.state.yaw = Math.PI;
   });
   await pageB.waitForTimeout(750);
   await pageB.evaluate(() => window.viewer.timeline.stop());

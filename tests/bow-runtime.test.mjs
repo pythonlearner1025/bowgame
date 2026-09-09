@@ -78,7 +78,7 @@ function harness() {
     setDirty() {},
   };
   const game = new BowGameRuntime(viewer);
-  game.config = {
+  game.state.config = {
     version: 1,
     kind: 'bow-deathmatch',
     botCount: 1,
@@ -88,11 +88,11 @@ function harness() {
     playerSpawn: { x: 0, y: 0, z: 0 },
     botSpawns: [{ x: 0, y: 0, z: -6 }],
   };
-  game.running = true;
-  game.active = true;
-  game.root = new Group();
-  game.bow = makeFieldBow();
-  game.root.add(game.bow, game.heldArrow, game.arm, game.hand);
+  game.state.running = true;
+  game.state.active = true;
+  game.world.root = new Group();
+  game.state.bow = makeFieldBow();
+  game.world.root.add(game.state.bow, game.state.heldArrow, game.state.arm, game.state.hand);
   const key = (code) => ({
     code,
     target: null,
@@ -112,111 +112,111 @@ function harness() {
 
 test('real WASD handlers move camera-relative, stop on keyup, and slide against cover', () => {
   const { game, key } = harness();
-  game.onKeyDown(key('KeyW'));
+  game.playerController.onKeyDown(key('KeyW'));
   for (let i = 0; i < 120; i++) {
     game.step(1 / 120);
   }
-  assert.ok(game.player.z < -4.4 && game.player.z > -4.6);
-  game.onKeyUp(key('KeyW'));
-  const stopped = game.player.clone();
+  assert.ok(game.state.player.z < -4.4 && game.state.player.z > -4.6);
+  game.playerController.onKeyUp(key('KeyW'));
+  const stopped = game.state.player.clone();
   game.step(0.1);
-  assert.deepEqual(game.player, stopped);
-  game.yaw = Math.PI / 2;
-  game.onKeyDown(key('KeyW'));
+  assert.deepEqual(game.state.player, stopped);
+  game.state.yaw = Math.PI / 2;
+  game.playerController.onKeyDown(key('KeyW'));
   game.step(0.1);
-  assert.ok(game.player.x < -0.4);
-  game.player.set(0, 0, 0);
-  game.yaw = 0;
-  game.config.obstacles = [{ x: 0, z: -1, r: 0.5, height: 2 }];
+  assert.ok(game.state.player.x < -0.4);
+  game.state.player.set(0, 0, 0);
+  game.state.yaw = 0;
+  game.state.config.obstacles = [{ x: 0, z: -1, r: 0.5, height: 2 }];
   for (let i = 0; i < 100; i++) {
     game.step(1 / 120);
   }
-  assert.ok(game.player.z > -0.13);
+  assert.ok(game.state.player.z > -0.13);
 });
 test('real draw/release handlers launch an arrow that hits a bot, awards kill, and ends match', () => {
   const { game, mouse } = harness();
-  game.onMouseDown(mouse(0));
+  game.playerController.onMouseDown(mouse(0));
   for (let i = 0; i < 150; i++) {
     game.step(1 / 120);
   }
-  assert.equal(game.charge, 1);
-  const bot = game.createBot(0);
+  assert.equal(game.state.charge, 1);
+  const bot = game.bots.create(0);
   bot.mesh.position.set(0, 0, -6);
-  game.bots = [bot];
-  game.onMouseUp(mouse(0));
-  assert.equal(game.arrows.length, 1);
-  assert.equal(game.arrows[0].damage, 70);
-  assert.equal(game.charge, 0);
-  assert.equal(game.drawing, false);
+  game.state.bots = [bot];
+  game.playerController.onMouseUp(mouse(0));
+  assert.equal(game.state.arrows.length, 1);
+  assert.equal(game.state.arrows[0].damage, 70);
+  assert.equal(game.state.charge, 0);
+  assert.equal(game.state.drawing, false);
   for (let i = 0; i < 40; i++) {
-    game.stepArrows(1 / 120);
+    game.arrows.step(1 / 120);
   }
   assert.equal(bot.hp, 0);
   assert.equal(bot.deaths, 1);
-  assert.equal(game.kills, 1);
-  assert.equal(game.winner, 'YOU');
+  assert.equal(game.state.kills, 1);
+  assert.equal(game.state.winner, 'YOU');
   assert.equal(bot.mesh.visible, false);
   assert.deepEqual(
-    game.deathFeed.map(({ killer, victim }) => ({ killer, victim })),
+    game.state.deathFeed.map(({ killer, victim }) => ({ killer, victim })),
     [{ killer: 'YOU', victim: 'ASH' }],
   );
 });
 test('bot arrows damage the player, credit bot kills, and respawn without resetting score', () => {
   const { game } = harness();
-  game.config.scoreLimit = 10;
-  const bot = game.createBot(0);
-  game.bots = [bot];
-  game.fire(new Vector3(0, 1.05, -3), new Vector3(0, 0, 1), 0, 1);
+  game.state.config.scoreLimit = 10;
+  const bot = game.bots.create(0);
+  game.state.bots = [bot];
+  game.arrows.fire(new Vector3(0, 1.05, -3), new Vector3(0, 0, 1), 0, 1);
   for (let i = 0; i < 20; i++) {
-    game.stepArrows(1 / 120);
+    game.arrows.step(1 / 120);
   }
-  assert.equal(game.hp, 30);
-  game.fire(new Vector3(0, 1.05, -3), new Vector3(0, 0, 1), 0, 1);
+  assert.equal(game.state.hp, 30);
+  game.arrows.fire(new Vector3(0, 1.05, -3), new Vector3(0, 0, 1), 0, 1);
   for (let i = 0; i < 20; i++) {
-    game.stepArrows(1 / 120);
+    game.arrows.step(1 / 120);
   }
-  assert.equal(game.hp, 0);
-  assert.equal(game.deaths, 1);
+  assert.equal(game.state.hp, 0);
+  assert.equal(game.state.deaths, 1);
   assert.equal(bot.kills, 1);
-  assert.equal(game.deathFeed[0].killer, 'ASH');
-  assert.equal(game.deathFeed[0].victim, 'YOU');
-  game.elapsed = game.deadUntil;
+  assert.equal(game.state.deathFeed[0].killer, 'ASH');
+  assert.equal(game.state.deathFeed[0].victim, 'YOU');
+  game.state.elapsed = game.state.deadUntil;
   game.step(1 / 120);
-  assert.equal(game.hp, 100);
-  assert.equal(game.deaths, 1);
+  assert.equal(game.state.hp, 100);
+  assert.equal(game.state.deaths, 1);
   assert.equal(bot.kills, 1);
 });
 test('R clears score and old killfeed; blur cancels a drawn shot', () => {
   const { game, key, mouse } = harness();
   game.addDeath('ASH', 'YOU');
-  game.message = 'ASH eliminated you';
-  game.messageUntil = 100;
-  game.kills = 8;
-  game.deaths = 4;
+  game.state.message = 'ASH eliminated you';
+  game.state.messageUntil = 100;
+  game.state.kills = 8;
+  game.state.deaths = 4;
 
   // Skip render-only update: restart uses real simulation state and the same R handler.
-  game.updateCamera = () => {};
+  game.playerController.updateCamera = () => {};
 
-  game.onKeyDown(key('KeyR'));
-  assert.equal(game.kills, 0);
-  assert.equal(game.deaths, 0);
-  assert.equal(game.hp, 100);
-  assert.equal(game.message, '');
-  assert.equal(game.messageUntil, 0);
-  assert.deepEqual(game.deathFeed, []);
-  game.onMouseDown(mouse(0));
+  game.playerController.onKeyDown(key('KeyR'));
+  assert.equal(game.state.kills, 0);
+  assert.equal(game.state.deaths, 0);
+  assert.equal(game.state.hp, 100);
+  assert.equal(game.state.message, '');
+  assert.equal(game.state.messageUntil, 0);
+  assert.deepEqual(game.state.deathFeed, []);
+  game.playerController.onMouseDown(mouse(0));
   game.step(0.2);
-  assert.ok(game.charge > 0);
-  game.onBlur();
-  assert.equal(game.active, false);
-  assert.equal(game.charge, 0);
-  game.onMouseUp(mouse(0));
-  assert.equal(game.arrows.length, 0);
+  assert.ok(game.state.charge > 0);
+  game.playerController.onBlur();
+  assert.equal(game.state.active, false);
+  assert.equal(game.state.charge, 0);
+  game.playerController.onMouseUp(mouse(0));
+  assert.equal(game.state.arrows.length, 0);
 });
 
 test('Multiplayer deaths use display names and clear between rounds.', () => {
   const { game } = harness();
-  game.syncRemotePlayers = () => {};
+  game.remotePlayers.sync = () => {};
   const snapshot = {
     status: 'connected',
     playerId: 'local',
@@ -231,16 +231,16 @@ test('Multiplayer deaths use display names and clear between rounds.', () => {
     ],
   };
 
-  game.onNetwork({ type: 'death', playerId: 'remote', killerId: 'local' }, snapshot);
+  game.network.onMessage({ type: 'death', playerId: 'remote', killerId: 'local' }, snapshot);
   assert.deepEqual(
-    game.deathFeed.map(({ killer, victim }) => ({ killer, victim })),
+    game.state.deathFeed.map(({ killer, victim }) => ({ killer, victim })),
     [{ killer: 'YOU', victim: 'ROOK' }],
   );
-  game.onNetwork({ type: 'death', playerId: 'local', killerId: 'remote' }, snapshot);
-  assert.equal(game.deathFeed[0].killer, 'ROOK');
-  assert.equal(game.deathFeed[0].victim, 'YOU');
-  game.resetOnlineRound();
-  assert.deepEqual(game.deathFeed, []);
+  game.network.onMessage({ type: 'death', playerId: 'local', killerId: 'remote' }, snapshot);
+  assert.equal(game.state.deathFeed[0].killer, 'ROOK');
+  assert.equal(game.state.deathFeed[0].victim, 'YOU');
+  game.combat.resetOnlineRound();
+  assert.deepEqual(game.state.deathFeed, []);
 });
 
 test('bow draw and release keep the nock on the string, flex without geometry allocation, and recover', () => {
@@ -293,25 +293,25 @@ test('human skin geometry is finite, tapered and articulated at the elbow and kn
 });
 test('release recovery blocks firing until an arrow has been re-nocked', () => {
   const { game, mouse } = harness();
-  game.onMouseDown(mouse(0));
+  game.playerController.onMouseDown(mouse(0));
   for (let i = 0; i < 150; i++) {
     game.step(1 / 120);
   }
-  game.onMouseUp(mouse(0));
-  game.onMouseDown(mouse(0));
-  assert.equal(game.drawing, false);
-  assert.equal(game.arrows.length, 1);
+  game.playerController.onMouseUp(mouse(0));
+  game.playerController.onMouseDown(mouse(0));
+  assert.equal(game.state.drawing, false);
+  assert.equal(game.state.arrows.length, 1);
   for (let i = 0; i < 127; i++) {
     game.step(1 / 120);
   }
-  game.onMouseDown(mouse(0));
-  assert.equal(game.drawing, true);
-  assert.equal(game.releaseTime, -1);
+  game.playerController.onMouseDown(mouse(0));
+  assert.equal(game.state.drawing, true);
+  assert.equal(game.state.releaseTime, -1);
 });
 test('inspection rejects unsafe or unbounded values and never advances combat', () => {
   const { game } = harness();
 
-  game.updateCamera = () => {};
+  game.playerController.updateCamera = () => {};
 
   game.updateHud = () => {};
 
@@ -330,7 +330,7 @@ test('inspection rejects unsafe or unbounded values and never advances combat', 
   }
   const before = game.getState();
   game.inspect({ view: 'first-person', draw: 1, release: 0.04 });
-  assert.equal(game.active, false);
+  assert.equal(game.state.active, false);
   assert.equal(game.getState().elapsed, before.elapsed);
   assert.equal(game.getState().kills, before.kills);
   game.inspect({ resume: true });
@@ -533,15 +533,15 @@ test('reference arrow retains physical length and measured screen landmarks whil
   assert.ok(Math.abs((tip.x + 1) / 2 - 0.5) < 0.001);
   assert.ok(Math.abs((1 - tip.y) / 2 - 0.5) < 0.001);
   const { game } = harness();
-  game.bow = makeFieldBow();
-  game.root.add(game.bow, game.heldArrow, game.arm, game.hand);
+  game.state.bow = makeFieldBow();
+  game.world.root.add(game.state.bow, game.state.heldArrow, game.state.arm, game.state.hand);
   game.inspect({ referenceTime: 3.4 });
-  game.root.updateMatrixWorld(true);
-  const string = game.bow.userData.bowString;
+  game.world.root.updateMatrixWorld(true);
+  const string = game.state.bow.userData.bowString;
   const nock = string.localToWorld(
     new Vector3().fromBufferAttribute(string.geometry.attributes.position, 1),
   );
-  const arrowNock = game.heldArrow.localToWorld(new Vector3(0, 0, 0.28));
+  const arrowNock = game.state.heldArrow.localToWorld(new Vector3(0, 0, 0.28));
   assert.ok(
     nock.distanceTo(arrowNock) < 1e-6,
     'held arrow and string meet during the same runtime update',
@@ -550,8 +550,8 @@ test('reference arrow retains physical length and measured screen landmarks whil
 
 test('the physical arrowhead is the full-draw sight and launches along its camera ray', () => {
   const visual = harness().game;
-  visual.fire(new Vector3(), new Vector3(0, 0, -1), -1, 1);
-  const model = visual.arrows[0].mesh;
+  visual.arrows.fire(new Vector3(), new Vector3(0, 0, -1), -1, 1);
+  const model = visual.state.arrows[0].mesh;
   model.updateMatrixWorld(true);
 
   const extent = (mesh, fn) => {
@@ -575,25 +575,25 @@ test('the physical arrowhead is the full-draw sight and launches along its camer
   for (const aspect of [16 / 9, 2479 / 1537]) {
     for (const aim of [false, true]) {
       const { game, mouse } = harness();
-      game.bow = makeFieldBow();
-      game.root.add(game.bow, game.heldArrow, game.arm, game.hand);
+      game.state.bow = makeFieldBow();
+      game.world.root.add(game.state.bow, game.state.heldArrow, game.state.arm, game.state.hand);
       const camera = game.viewer.scene.mainCamera;
       camera.aspect = aspect;
       game.inspect({ draw: 1, aim });
-      game.root.updateMatrixWorld(true);
+      game.world.root.updateMatrixWorld(true);
       camera.updateMatrixWorld(true);
-      const head = game.heldArrow.localToWorld(new Vector3(0, 0, -0.765)),
+      const head = game.state.heldArrow.localToWorld(new Vector3(0, 0, -0.765)),
         screen = head.clone().project(camera);
       assert.ok(
         Math.abs(screen.x) < 1e-6 && Math.abs(screen.y) < 1e-6,
         'rendered physical tip is screen center without an extra reticle',
       );
-      game.preview = null;
-      game.charge = 1;
-      game.drawing = true;
-      game.aimBlend = aim ? 1 : 0;
-      game.onMouseUp(mouse(0));
-      const arrow = game.arrows[0],
+      game.state.preview = null;
+      game.state.charge = 1;
+      game.state.drawing = true;
+      game.state.aimBlend = aim ? 1 : 0;
+      game.playerController.onMouseUp(mouse(0));
+      const arrow = game.state.arrows[0],
         expected = head.clone().sub(camera.position).normalize();
       assert.ok(
         arrow.position.distanceTo(head) < 1e-6,
@@ -603,7 +603,7 @@ test('the physical arrowhead is the full-draw sight and launches along its camer
         arrow.velocity.clone().normalize().distanceTo(expected) < 1e-6,
         'projectile direction is the visible tip ray',
       );
-      game.stepArrows(0.1);
+      game.arrows.step(0.1);
       assert.ok(
         arrow.velocity.y < expected.y * 55,
         'gravity lowers the visible flight after release',
@@ -616,8 +616,8 @@ test('real collision audio routes headshots, body hits, cover and once-per-arrow
   const setup = () => {
     const { game } = harness(),
       events = [];
-    game.config.scoreLimit = 10;
-    game.sounds = {
+    game.state.config.scoreLimit = 10;
+    game.state.sounds = {
       release() {},
       setListener() {},
       impact(position, kind) {
@@ -641,11 +641,11 @@ test('real collision audio routes headshots, body hits, cover and once-per-arrow
     [1.05, 'body'],
   ]) {
     const { game, events } = setup();
-    game.bots = [game.createBot(0)];
-    game.bots[0].mesh.position.set(0, 0, -3);
-    game.fire(new Vector3(0, height, 0), new Vector3(0, 0, -1), -1, 1);
+    game.state.bots = [game.bots.create(0)];
+    game.state.bots[0].mesh.position.set(0, 0, -3);
+    game.arrows.fire(new Vector3(0, height, 0), new Vector3(0, 0, -1), -1, 1);
     for (let i = 0; i < 15; i++) {
-      game.stepArrows(1 / 120);
+      game.arrows.step(1 / 120);
     }
     assert.ok(events.includes(kind));
     assert.equal(events.includes('confirmation'), kind === 'head');
@@ -653,15 +653,15 @@ test('real collision audio routes headshots, body hits, cover and once-per-arrow
   }
 
   const miss = setup();
-  miss.game.fire(new Vector3(1, 1.6, -3), new Vector3(0, 0, 1), 0, 1);
+  miss.game.arrows.fire(new Vector3(1, 1.6, -3), new Vector3(0, 0, 1), 0, 1);
   for (let i = 0; i < 8; i++) {
-    miss.game.stepArrows(1 / 120);
+    miss.game.arrows.step(1 / 120);
   }
   assert.equal(miss.events.filter((eventValue) => eventValue === 'whizz').length, 1);
   const cover = setup();
-  cover.game.player.x = 10;
-  cover.game.config.obstacles = [{ x: 0, z: -0.3, r: 0.2, height: 3 }];
-  cover.game.fire(new Vector3(0, 1.6, 0), new Vector3(0, 0, -1), 0, 1);
-  cover.game.stepArrows(1 / 120);
+  cover.game.state.player.x = 10;
+  cover.game.state.config.obstacles = [{ x: 0, z: -0.3, r: 0.2, height: 3 }];
+  cover.game.arrows.fire(new Vector3(0, 1.6, 0), new Vector3(0, 0, -1), 0, 1);
+  cover.game.arrows.step(1 / 120);
   assert.deepEqual(cover.events, ['cover']);
 });

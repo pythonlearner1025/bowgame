@@ -69,7 +69,7 @@ function harness() {
       setDirty() {},
     };
   const game = new BowGameRuntime(viewer);
-  game.config = {
+  game.state.config = {
     version: 1,
     kind: 'bow-deathmatch',
     botCount: 1,
@@ -79,16 +79,16 @@ function harness() {
     playerSpawn: { x: 0, y: 0, z: 0 },
     botSpawns: [{ x: 0, y: 0, z: -6 }],
   };
-  game.running = true;
-  game.active = true;
-  game.root = new Group();
-  game.bow = makeFieldBow();
+  game.state.running = true;
+  game.state.active = true;
+  game.world.root = new Group();
+  game.state.bow = makeFieldBow();
   const skin = firstPersonSkin();
-  game.leftArm = makeArm(skin, -1);
-  game.rightArm = makeArm(skin, 1);
-  game.arm = game.leftArm.root;
-  game.hand = game.rightArm.root;
-  game.root.add(game.bow, game.heldArrow, game.arm, game.hand);
+  game.state.leftArm = makeArm(skin, -1);
+  game.state.rightArm = makeArm(skin, 1);
+  game.state.arm = game.state.leftArm.root;
+  game.state.hand = game.state.rightArm.root;
+  game.world.root.add(game.state.bow, game.state.heldArrow, game.state.arm, game.state.hand);
   const mouse = (button) => ({
     button,
     target: canvas,
@@ -97,8 +97,8 @@ function harness() {
   });
 
   const render = () => {
-    game.updateCamera();
-    game.root.updateMatrixWorld(true);
+    game.playerController.updateCamera();
+    game.world.root.updateMatrixWorld(true);
     camera.updateMatrixWorld(true);
   };
 
@@ -118,10 +118,10 @@ function harness() {
 
 test('live streak samples actual gravity-curved physics positions', () => {
   const { game, advance, camera } = harness();
-  game.fire(new Vector3(0, 8, 0), new Vector3(0, 0.1, -1).normalize(), -1, 1);
+  game.arrows.fire(new Vector3(0, 8, 0), new Vector3(0, 0.1, -1).normalize(), -1, 1);
   advance(0.25);
-  const arrow = game.arrows[0],
-    slot = game.trails.slots[arrow.trail.slot];
+  const arrow = game.state.arrows[0],
+    slot = game.world.trails.slots[arrow.trail.slot];
   assert.ok(slot.count > 10);
   assert.ok(slot.points[slot.count - 1].distanceTo(arrow.position) < 1e-9);
   const first = slot.points[0],
@@ -129,7 +129,7 @@ test('live streak samples actual gravity-curved physics positions', () => {
     last = slot.points[slot.count - 1],
     linear = first.clone().lerp(last, (mid.z - first.z) / (last.z - first.z));
   assert.ok(mid.y > linear.y + 0.003, 'gravity curve must not become a straight velocity ray');
-  game.trails.update(game.elapsed, camera.position);
+  game.world.trails.update(game.state.elapsed, camera.position);
   assert.equal(slot.mesh.visible, true);
   const vertices = (slot.mesh.geometry.drawRange.count / 6 + 1) * 2;
 
@@ -151,17 +151,17 @@ test('live streak samples actual gravity-curved physics positions', () => {
 });
 test('cover clips trail and rendered arrow tip; impact tail decays', () => {
   const { game, advance } = harness();
-  game.config.obstacles = [{ x: 0, z: -3, r: 0.5, height: 4 }];
-  game.fire(new Vector3(0, 2, 0), new Vector3(0, 0, -1), -1, 1);
+  game.state.config.obstacles = [{ x: 0, z: -3, r: 0.5, height: 4 }];
+  game.arrows.fire(new Vector3(0, 2, 0), new Vector3(0, 0, -1), -1, 1);
   advance(0.08);
-  const arrow = game.arrows[0];
+  const arrow = game.state.arrows[0];
   assert.equal(arrow.stuck, true);
-  const slot = game.trails.slots[arrow.trail.slot],
+  const slot = game.world.trails.slots[arrow.trail.slot],
     count = slot.count;
   for (let i = 0; i < count; i++) {
     assert.ok(slot.points[i].z >= -2.5 - 1e-6, 'trail cannot pass wall');
   }
-  game.root.updateMatrixWorld(true);
+  game.world.root.updateMatrixWorld(true);
   assert.ok(
     arrow.mesh.localToWorld(new Vector3(0, 0, -0.765)).distanceTo(arrow.position) < 1e-8,
     'rendered tip must end at collision',
@@ -193,10 +193,10 @@ test('pool capacity, stale handles and disposal remain bounded', () => {
 });
 test('restart clears streaks and HUD has no crosshair or draw-progress bar', async () => {
   const { game, advance } = harness();
-  game.fire(new Vector3(0, 5, 0), new Vector3(0, 0, -1), -1, 1);
+  game.arrows.fire(new Vector3(0, 5, 0), new Vector3(0, 0, -1), -1, 1);
   advance(0.05);
-  game.restart();
-  assert.ok(game.trails.slots.every((sample) => !sample.active && !sample.mesh.visible));
+  game.combat.restart();
+  assert.ok(game.world.trails.slots.every((sample) => !sample.active && !sample.mesh.visible));
   const { readFile } = await import('node:fs/promises');
   const source = await readFile(new URL('../src/BowGameRuntime.ts', import.meta.url), 'utf8');
   assert.ok(!source.includes("add('cross'"));
@@ -209,16 +209,16 @@ test('bounded flight inspection advances real physics and reset removes projecti
     assert.throws(() => game.inspect({ flightSeconds: value }));
   }
   game.inspect({ flightSeconds: 0.15, flightSide: true });
-  assert.equal(game.arrows.length, 1);
-  assert.ok(Math.abs(game.elapsed - 0.15) < 1e-9);
-  assert.equal(game.arrows[0].age, game.elapsed);
-  const firstValue = game.arrows[0],
-    slot = game.trails.slots[firstValue.trail.slot];
+  assert.equal(game.state.arrows.length, 1);
+  assert.ok(Math.abs(game.state.elapsed - 0.15) < 1e-9);
+  assert.equal(game.state.arrows[0].age, game.state.elapsed);
+  const firstValue = game.state.arrows[0],
+    slot = game.world.trails.slots[firstValue.trail.slot];
   assert.ok(Math.abs(slot.times[slot.count - 1] - 0.15) < 1e-9);
   assert.ok(slot.points[slot.count - 1].distanceTo(firstValue.position) < 1e-9);
-  assert.equal(game.heldArrow.visible, false);
+  assert.equal(game.state.heldArrow.visible, false);
   game.inspect({ draw: 0 });
-  assert.equal(game.arrows.length, 0);
-  assert.ok(game.trails.slots.every((sample) => !sample.active && !sample.mesh.visible));
-  assert.equal(game.elapsed, 0);
+  assert.equal(game.state.arrows.length, 0);
+  assert.ok(game.world.trails.slots.every((sample) => !sample.active && !sample.mesh.visible));
+  assert.equal(game.state.elapsed, 0);
 });

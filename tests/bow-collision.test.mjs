@@ -245,46 +245,46 @@ test('full arena collision cost benchmark (four capsules per fixed step)', () =>
 test('world and player hits compete by nearest distance; remote visuals never apply damage', () => {
   const setup = () => {
     const game = new BowGameRuntime({});
-    game.config = { scoreLimit: 10, obstacles: [] };
-    game.collision = world;
-    game.player.set(0, 0, 17);
+    game.state.config = { scoreLimit: 10, obstacles: [] };
+    game.world.collision = world;
+    game.state.player.set(0, 0, 17);
     const target = { mesh: new Group(), hp: 100, kills: 0, deaths: 0, name: 'test' };
-    game.bots = [target];
+    game.state.bots = [target];
 
     return { game, target };
   };
 
   const run = (game) => {
     for (let i = 0; i < 20; i++) {
-      game.stepArrows(dt);
+      game.arrows.step(dt);
     }
   };
 
   const blocked = setup();
   blocked.target.mesh.position.set(9, 0, 4);
-  blocked.game.fire(new Vector3(9, 1.05, 10), new Vector3(0, 0, -1), -1, 1);
+  blocked.game.arrows.fire(new Vector3(9, 1.05, 10), new Vector3(0, 0, -1), -1, 1);
   run(blocked.game);
   assert.equal(blocked.target.hp, 100);
-  assert.ok(blocked.game.lastWorldImpact);
-  assert.ok(blocked.game.arrows[0].stuck);
+  assert.ok(blocked.game.state.lastWorldImpact);
+  assert.ok(blocked.game.state.arrows[0].stuck);
   const near = setup();
   near.target.mesh.position.set(9, 0, 9);
-  near.game.fire(new Vector3(9, 1.05, 10), new Vector3(0, 0, -1), -1, 1);
+  near.game.arrows.fire(new Vector3(9, 1.05, 10), new Vector3(0, 0, -1), -1, 1);
   run(near.game);
   assert.equal(near.target.hp, 30);
-  assert.equal(near.game.lastWorldImpact, null);
+  assert.equal(near.game.state.lastWorldImpact, null);
   const remote = setup();
-  remote.game.player.set(9, 0, 9);
-  remote.game.spawnArrow(new Vector3(9, 1.05, 10), new Vector3(0, 0, -56), {
+  remote.game.state.player.set(9, 0, 9);
+  remote.game.arrows.spawn(new Vector3(9, 1.05, 10), new Vector3(0, 0, -56), {
     owner: 0,
     arrowId: 'remote',
     isVisualOnly: true,
   });
   run(remote.game);
-  assert.equal(remote.game.hp, 100);
-  assert.ok(remote.game.arrows[0].stuck);
-  assert.equal(remote.game.arrows[0].mesh.visible, false);
-  assert.equal(remote.game.lastWorldImpact, null);
+  assert.equal(remote.game.state.hp, 100);
+  assert.ok(remote.game.state.arrows[0].stuck);
+  assert.equal(remote.game.state.arrows[0].mesh.visible, false);
+  assert.equal(remote.game.state.lastWorldImpact, null);
 });
 test('all required arena parts are solid; foliage, grass and scree are excluded', () => {
   const names = new Set();
@@ -313,25 +313,25 @@ test('all required arena parts are solid; foliage, grass and scree are excluded'
 });
 test('real runtime jump input lands on the authored crate without a second jump', () => {
   const game = new BowGameRuntime({});
-  game.config = { obstacles: [], scoreLimit: 10 };
-  game.collision = world;
-  game.player.set(6.7, 0, -2.35);
+  game.state.config = { obstacles: [], scoreLimit: 10 };
+  game.world.collision = world;
+  game.state.player.set(6.7, 0, -2.35);
   for (let i = 0; i < 30; i++) {
     game.step(dt);
   }
-  game.keys.add('Space');
-  game.keys.add('KeyW');
+  game.state.keys.add('Space');
+  game.state.keys.add('KeyW');
   game.step(dt);
-  game.keys.delete('Space');
+  game.state.keys.delete('Space');
   for (let i = 0; i < 51; i++) {
     game.step(dt);
   }
-  game.keys.clear();
+  game.state.keys.clear();
   for (let i = 0; i < 160; i++) {
     game.step(dt);
   }
-  assert.ok(game.grounded);
-  assert.ok(game.player.y > 0.9 && game.player.y < 1);
+  assert.ok(game.state.grounded);
+  assert.ok(game.state.player.y > 0.9 && game.state.player.y < 1);
 });
 
 test('spawn stays under the open shelter canopy instead of treating the tarp as a filled volume', () => {
