@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Timber / Ash — Bow Deathmatch</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body, #player, #bow-canvas { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: #161b17; }
+    #player { position: relative; }
+    #bow-canvas { display: block; outline: 0; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; color: #d8dacb; font: 700 12px system-ui, sans-serif; letter-spacing: 3px; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="player">
+    <canvas id="bow-canvas" tabindex="0"></canvas>
+    <div id="loading">PREPARING ARENA</div>
+  </div>
+  <script type="module" src="/main.ts"></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": {
+    "main.scene.glb": {"path": "assets/main.scene.glb", "sha256": "27ba1ef3cdc2ea6b3d6c8d1101682b9d4df1311fc0708f0210ad7d80897d0ec1", "mime": "model/gltf-binary"},
     "bow-audio/LICENSES.md": {"path": "assets/bow-audio/LICENSES.md", "sha256": "29136a39d03d3ca48a8cb578e3e86926b3706ebe11217edcce4725ca74dd5df5", "mime": "text/markdown"},
     "bow-audio/PROVENANCE.json": {"path": "assets/bow-audio/PROVENANCE.json", "sha256": "f26f763b9611cfc60f800dafb044e1d9f2446e98e813632b0272568a0830e547", "mime": "application/json"},
     "bow-audio/PROVENANCE.md": {"path": "assets/bow-audio/PROVENANCE.md", "sha256": "6c79c6dc801591c1f26baf7ecedce6fa6da469f1566f5adb6a814cdb1591d1fd", "mime": "text/markdown"},
