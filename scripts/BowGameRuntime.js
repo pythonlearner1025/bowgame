@@ -20,6 +20,10 @@ const animateBow = deformBow;
 function disposeGroup(group) { const geoms = new Set(), mats = new Set(); group.traverse((o) => { if (o.geometry)
     geoms.add(o.geometry); if (o.material)
     (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m)); }); geoms.forEach(g => g.dispose()); mats.forEach(m => m.dispose()); group.removeFromParent(); }
+function disposeArena(group) { const textures = new Set(); group.traverse((o) => { const materials = o.material ? Array.isArray(o.material) ? o.material : [o.material] : []; for (const material of materials)
+    for (const value of Object.values(material))
+        if (value?.isTexture)
+            textures.add(value); }); disposeGroup(group); textures.forEach(texture => texture.dispose()); }
 /** Declarative local API game. No supplied source code or remote assets are evaluated. */
 export class BowGameRuntime {
     viewer;
@@ -254,7 +258,7 @@ export class BowGameRuntime {
             viewer.setDirty();
         }
         if (this.ownsArena && this.arenaRoot) {
-            disposeGroup(this.arenaRoot);
+            disposeArena(this.arenaRoot);
             this.arenaRoot = undefined;
         }
         this.sounds?.dispose();

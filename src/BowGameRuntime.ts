@@ -19,6 +19,7 @@ function arrowModel(){const g=new Group();const wood=MAT(0xaa772d),iron=MAT(0xc3
 const bowModel=makeFieldBow;
 const animateBow=deformBow;
 function disposeGroup(group:Group){const geoms=new Set<any>(),mats=new Set<any>();group.traverse((o:any)=>{if(o.geometry)geoms.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach((m:any)=>mats.add(m));});geoms.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());group.removeFromParent();}
+function disposeArena(group:Group){const textures=new Set<any>();group.traverse((o:any)=>{const materials=o.material?Array.isArray(o.material)?o.material:[o.material]:[];for(const material of materials)for(const value of Object.values(material))if((value as any)?.isTexture)textures.add(value);});disposeGroup(group);textures.forEach(texture=>texture.dispose());}
 
 /** Declarative local API game. No supplied source code or remote assets are evaluated. */
 export class BowGameRuntime {
@@ -83,7 +84,7 @@ export class BowGameRuntime {
         this.trails?.dispose();this.trails=null;this.sceneBatch?.dispose();this.sceneBatch=null;disposeGroup(this.root);this.arrows=[];this.bots=[];this.hidden.forEach(s=>s.object.visible=s.visible);this.hidden=[];
         const viewer=this.viewer;if(viewer&&this.cameraRestore){const c=viewer.scene.mainCamera,s=this.cameraRestore;c.position.copy(s.position);c.quaternion.copy(s.quaternion);if(s.target)c.target?.copy(s.target);if(c.controls)c.controls.enabled=s.controls;(c as any).fov=s.fov;(c as any).updateProjectionMatrix?.();this.cameraRestore=null;}
         if(viewer&&this.sceneRestore){viewer.scene.background=this.sceneRestore.background;viewer.scene.fog=this.sceneRestore.fog;viewer.renderManager.renderScale=this.sceneRestore.renderScale;this.sceneRestore=null;viewer.setDirty();}
-        if(this.ownsArena&&this.arenaRoot){disposeGroup(this.arenaRoot);this.arenaRoot=undefined;}
+        if(this.ownsArena&&this.arenaRoot){disposeArena(this.arenaRoot);this.arenaRoot=undefined;}
         this.sounds?.dispose();this.sounds=null;return this.getState();
     }
     getState(){return {audio:this.sounds?.getState()??null,renderBatch:this.sceneBatch?{originalMeshes:this.sceneBatch.originalMeshes,batches:this.sceneBatch.batches}:null,performance:this.performanceStats?.summary()??null,preview:this.preview,animation:{phase:this.posePhase,releaseSeconds:Number(this.releaseTime.toFixed(3))},kind:'bow-deathmatch',configured:this.isConfigured(),active:this.running,paused:!this.active||this.isPaused(),health:this.hp,kills:this.kills,deaths:this.deaths,scoreLimit:this.config?.scoreLimit??10,winner:this.winner,draw:Number(this.charge.toFixed(3)),arrowsInFlight:this.arrows.filter(a=>!a.stuck).length,elapsed:Number(this.elapsed.toFixed(2)),player:{position:{x:this.player.x,y:this.player.y,z:this.player.z},yaw:this.yaw,pitch:this.pitch,alive:this.hp>0},bots:this.bots.map(b=>({name:b.name,health:b.hp,kills:b.kills,deaths:b.deaths,alive:b.hp>0,position:{x:b.mesh.position.x,y:b.mesh.position.y,z:b.mesh.position.z},drawing:b.draw>0})),controls:'Click viewport • WASD move • mouse aim • hold/release LMB shoot • RMB aim • Shift sprint • Space jump • R restart • M mute • Esc pause'};}
