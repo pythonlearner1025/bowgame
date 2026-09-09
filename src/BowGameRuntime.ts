@@ -24,6 +24,10 @@ import { preloadHumanAsset } from './BowHumanAsset.js';
 import type { BowPerformance } from './BowPerformance.js';
 import { sampleReferenceAction } from './BowReferenceClip.js';
 
+// Physics advances at 120 Hz so collision and coyote timing remain deterministic.
+const FIXED_STEPS_PER_SECOND = 120;
+const FIXED_STEP_SECONDS = 1 / FIXED_STEPS_PER_SECOND;
+
 export type { BowGameConfig, BowGameRuntimeOptions } from './GameState.js';
 
 /** Coordinates the stable public game surface while delegating each owner responsibility. */
@@ -400,6 +404,7 @@ export class BowGameRuntime {
     const result = this.world.inspectCollision({
       state: this.state,
       action,
+      fixedStepSeconds: FIXED_STEP_SECONDS,
       step: (dt) => this.step(dt),
       fireArrow: (position, velocity, isVisualOnly) =>
         this.arrows.spawn(position, velocity, { owner: -1, isVisualOnly }),
@@ -429,9 +434,9 @@ export class BowGameRuntime {
     if (isActive && !this.state.testClockPaused) {
       this.state.accumulator += dt;
 
-      while (this.state.accumulator >= 1 / 120) {
-        this.step(1 / 120);
-        this.state.accumulator -= 1 / 120;
+      while (this.state.accumulator >= FIXED_STEP_SECONDS) {
+        this.step(FIXED_STEP_SECONDS);
+        this.state.accumulator -= FIXED_STEP_SECONDS;
       }
     }
 

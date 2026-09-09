@@ -10,6 +10,12 @@ import { GRAVITY, moveWithCover } from './BowPhysics.js';
 import type { BowGameConfig, CameraRestoreState, GameState } from './GameState.js';
 import type { GameWorld } from './GameWorld.js';
 
+// Ground support remains jumpable for one tenth of a second after an edge departure.
+const COYOTE_WINDOW_SECONDS = 0.1;
+
+// The original 4.8-meter-per-second impulse preserves the established jump arc.
+const JUMP_SPEED_METERS_PER_SECOND = 4.8;
+
 /** Lifecycle and rule side effects invoked by local input or movement. */
 export interface PlayerControllerCallbacks {
   enter: () => void;
@@ -317,13 +323,29 @@ export class PlayerController {
       this.state.velocity.x = dx / dt;
       this.state.velocity.z = dz / dt;
 
-      if (this.state.keys.has('Space') && this.state.grounded) {
-        this.state.velocity.y = 4.8;
+      const hasSupport = this.world.collision.hasSupport(this.state.player);
+      const isSupported = hasSupport && this.state.velocity.y <= 0;
+
+      if (isSupported) {
+        this.state.grounded = true;
+        this.state.coyoteSecondsRemaining = COYOTE_WINDOW_SECONDS;
+      } else {
         this.state.grounded = false;
+        this.state.coyoteSecondsRemaining = Math.max(0, this.state.coyoteSecondsRemaining - dt);
+      }
+
+      if (this.state.keys.has('Space') && this.state.coyoteSecondsRemaining > 0) {
+        this.state.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
+        this.state.grounded = false;
+        this.state.coyoteSecondsRemaining = 0;
       }
 
       this.state.velocity.y -= GRAVITY * dt;
       this.state.grounded = this.world.collision.move(this.state.player, this.state.velocity, dt);
+
+      if (this.state.grounded) {
+        this.state.coyoteSecondsRemaining = COYOTE_WINDOW_SECONDS;
+      }
 
       return;
     }
@@ -332,7 +354,7 @@ export class PlayerController {
     this.state.player.copy(moveWithCover(this.state.player, dx, dz, this.getConfig().obstacles));
 
     if (this.state.keys.has('Space') && this.state.player.y === 0) {
-      this.state.velocity.y = 4.8;
+      this.state.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
     }
 
     this.state.velocity.y -= GRAVITY * dt;

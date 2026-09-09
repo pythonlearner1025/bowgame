@@ -44,3 +44,38 @@ test('PlayerController converts accepted keys into movement and a legacy jump', 
   assert.ok(state.player.y > 0);
   assert.equal(state.keys.has('KeyW'), false);
 });
+
+test('PlayerController preserves the collision coyote window after support is lost', async () => {
+  const config = makeConfig();
+  const state = new GameState(config);
+  const viewer = await makeViewer();
+  state.running = true;
+  state.coyoteSecondsRemaining = 0.1;
+  state.keys.add('Space');
+  const controller = new PlayerController({
+    viewer,
+    state,
+    world: {
+      collision: {
+        hasSupport: () => false,
+        move: () => false,
+      },
+      trails: null,
+    },
+    bow: {},
+    bots: {},
+    getConfig: () => config,
+    callbacks: {
+      enter() {},
+      restart() {},
+      stepRespawn() {},
+      getAudio: () => null,
+      isOnline: () => false,
+    },
+  });
+
+  controller.step(0.05);
+
+  assert.ok(state.velocity.y > 4);
+  assert.equal(state.coyoteSecondsRemaining, 0);
+});

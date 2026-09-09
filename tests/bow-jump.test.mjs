@@ -81,27 +81,27 @@ function platformFixture() {
 
 function jumpRuntime(collision, position) {
   const game = new BowGameRuntime({});
-  game.config = { obstacles: [], scoreLimit: 10 };
-  game.collision = collision;
-  game.player.copy(position);
+  game.state.config = { obstacles: [], scoreLimit: 10 };
+  game.world.collision = collision;
+  game.state.player.copy(position);
 
   return game;
 }
 
 function pressJump(game) {
-  game.keys.add('Space');
+  game.state.keys.add('Space');
   game.step(FIXED_STEP_SECONDS);
-  game.keys.delete('Space');
+  game.state.keys.delete('Space');
 }
 
 function walkOffPlatform(game) {
-  game.keys.add('KeyD');
-  while (game.grounded || game.player.x === 0) {
+  game.state.keys.add('KeyD');
+  while (game.state.grounded || game.state.player.x === 0) {
     game.step(FIXED_STEP_SECONDS);
   }
   // Clear rounded edge contact without consuming the coyote window under test.
-  game.player.x += EDGE_CLEARANCE_METERS;
-  game.keys.clear();
+  game.state.player.x += EDGE_CLEARANCE_METERS;
+  game.state.keys.clear();
 }
 
 test('Player jumps after standing still for two seconds.', () => {
@@ -110,39 +110,39 @@ test('Player jumps after standing still for two seconds.', () => {
   for (let i = 0; i < FIXED_STEPS_PER_SECOND * STANDING_DURATION_SECONDS; i++) {
     game.step(FIXED_STEP_SECONDS);
   }
-  const groundedHeight = game.player.y;
+  const groundedHeight = game.state.player.y;
 
   pressJump(game);
 
-  assert.ok(game.player.y > groundedHeight);
-  assert.ok(game.velocity.y > 0);
+  assert.ok(game.state.player.y > groundedHeight);
+  assert.ok(game.state.velocity.y > 0);
   collision.dispose();
 });
 
 test('Player jumps on the first walking step from fresh support.', () => {
   const collision = floorFixture();
   const game = jumpRuntime(collision, new Vector3(2, 0, 0));
-  game.keys.add('KeyW');
-  game.keys.add('Space');
+  game.state.keys.add('KeyW');
+  game.state.keys.add('Space');
 
   game.step(FIXED_STEP_SECONDS);
 
-  assert.ok(game.player.y > MINIMUM_FIRST_STEP_HEIGHT_METERS);
-  assert.ok(game.velocity.y > MINIMUM_JUMP_SPEED_METERS_PER_SECOND);
+  assert.ok(game.state.player.y > MINIMUM_FIRST_STEP_HEIGHT_METERS);
+  assert.ok(game.state.velocity.y > MINIMUM_JUMP_SPEED_METERS_PER_SECOND);
   collision.dispose();
 });
 
 test('Player jumps while sprinting from fresh support.', () => {
   const collision = floorFixture();
   const game = jumpRuntime(collision, new Vector3(2, 0, 0));
-  game.keys.add('KeyW');
-  game.keys.add('ShiftLeft');
-  game.keys.add('Space');
+  game.state.keys.add('KeyW');
+  game.state.keys.add('ShiftLeft');
+  game.state.keys.add('Space');
 
   game.step(FIXED_STEP_SECONDS);
 
-  assert.ok(game.player.y > MINIMUM_FIRST_STEP_HEIGHT_METERS);
-  assert.ok(game.velocity.y > MINIMUM_JUMP_SPEED_METERS_PER_SECOND);
+  assert.ok(game.state.player.y > MINIMUM_FIRST_STEP_HEIGHT_METERS);
+  assert.ok(game.state.velocity.y > MINIMUM_JUMP_SPEED_METERS_PER_SECOND);
   collision.dispose();
 });
 
@@ -152,8 +152,8 @@ test('Player jumps immediately from a crate top.', () => {
 
   pressJump(game);
 
-  assert.ok(game.player.y > 0.9501);
-  assert.ok(game.velocity.y > 0);
+  assert.ok(game.state.player.y > 0.9501);
+  assert.ok(game.state.velocity.y > 0);
   collision.dispose();
 });
 
@@ -167,7 +167,7 @@ test('Player jumps inside the coyote window after leaving a platform.', () => {
 
   pressJump(game);
 
-  assert.ok(game.velocity.y > MINIMUM_JUMP_SPEED_METERS_PER_SECOND);
+  assert.ok(game.state.velocity.y > MINIMUM_JUMP_SPEED_METERS_PER_SECOND);
   collision.dispose();
 });
 
@@ -181,6 +181,6 @@ test('Player cannot jump after the coyote window expires.', () => {
 
   pressJump(game);
 
-  assert.ok(game.velocity.y < 1);
+  assert.ok(game.state.velocity.y < 1);
   collision.dispose();
 });

@@ -33,6 +33,7 @@ import type {
 export interface CollisionInspectionOptions {
   state: GameState;
   action: CollisionTestAction;
+  fixedStepSeconds: number;
   step: (dt: number) => void;
   fireArrow: (position: Vector3, velocity: Vector3, isVisualOnly: boolean) => void;
   getSlotSpawn: (slot: number) => Vector3;
@@ -275,6 +276,7 @@ export class GameWorld {
       state.player.fromArray(action.position);
       state.velocity.set(0, 0, 0);
       state.grounded = false;
+      state.coyoteSecondsRemaining = 0;
       state.lastWorldImpact = null;
       state.hp = 100;
     }
@@ -293,7 +295,7 @@ export class GameWorld {
     }
 
     for (let i = 0; i < Math.min(1200, action.steps ?? 0); i++) {
-      options.step(1 / 120);
+      options.step(options.fixedStepSeconds);
     }
 
     if (action.resume) {

@@ -200,6 +200,7 @@ export class GameWorld {
             state.player.fromArray(action.position);
             state.velocity.set(0, 0, 0);
             state.grounded = false;
+            state.coyoteSecondsRemaining = 0;
             state.lastWorldImpact = null;
             state.hp = 100;
         }
@@ -211,7 +212,7 @@ export class GameWorld {
             options.fireArrow(new Vector3().fromArray(fire.origin), new Vector3().fromArray(fire.direction).normalize().multiplyScalar(shotSpeed(1)), Boolean(fire.remote));
         }
         for (let i = 0; i < Math.min(1200, action.steps ?? 0); i++) {
-            options.step(1 / 120);
+            options.step(options.fixedStepSeconds);
         }
         if (action.resume) {
             state.testClockPaused = false;

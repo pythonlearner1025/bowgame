@@ -48,6 +48,7 @@ export class CombatRules {
         this.state.pitch = 0;
         this.state.velocity.set(0, 0, 0);
         this.state.grounded = false;
+        this.state.coyoteSecondsRemaining = 0;
         this.state.lastWorldImpact = null;
         this.state.drawing = false;
         this.state.charge = 0;
@@ -88,6 +89,7 @@ export class CombatRules {
             : this.getConfig().playerSpawn);
         this.state.velocity.set(0, 0, 0);
         this.state.grounded = false;
+        this.state.coyoteSecondsRemaining = 0;
         this.state.lastWorldImpact = null;
     }
     /**
@@ -205,6 +207,7 @@ export class CombatRules {
         this.state.player.copy(this.callbacks.getSlotSpawn(local?.slot ?? 0));
         this.state.velocity.set(0, 0, 0);
         this.state.grounded = false;
+        this.state.coyoteSecondsRemaining = 0;
         this.state.lastWorldImpact = null;
         this.state.drawing = false;
         this.state.charge = 0;

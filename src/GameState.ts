@@ -153,6 +153,7 @@ export interface HiddenObjectState {
 export class GameState {
   running = false;
   grounded = false;
+  coyoteSecondsRemaining = 0;
   testClockPaused = false;
   lastWorldImpact: Vector3 | null = null;
   preview: InspectOptions | null = null;
@@ -221,6 +222,7 @@ export class GameState {
     this.winner = '';
     this.velocity.set(0, 0, 0);
     this.grounded = false;
+    this.coyoteSecondsRemaining = 0;
     this.lastWorldImpact = null;
     this.drawing = false;
     this.charge = 0;

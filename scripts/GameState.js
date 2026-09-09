@@ -8,6 +8,7 @@ export class GameState {
     config;
     running = false;
     grounded = false;
+    coyoteSecondsRemaining = 0;
     testClockPaused = false;
     lastWorldImpact = null;
     preview = null;
@@ -76,6 +77,7 @@ export class GameState {
         this.winner = '';
         this.velocity.set(0, 0, 0);
         this.grounded = false;
+        this.coyoteSecondsRemaining = 0;
         this.lastWorldImpact = null;
         this.drawing = false;
         this.charge = 0;

@@ -128,6 +128,7 @@ export class NetworkGlue {
       this.state.player.copy(this.callbacks.getSlotSpawn(own.slot));
       this.state.velocity.set(0, 0, 0);
       this.state.grounded = false;
+      this.state.coyoteSecondsRemaining = 0;
       this.state.lastWorldImpact = null;
       this.state.hp = 100;
     }
