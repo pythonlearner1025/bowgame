@@ -3,13 +3,13 @@
   "baseURL": "https://bowgame.minjunesv0.workers.dev",
   "roster": [
     {
-      "id": "32139a34-90be-4352-8676-d6bce8234241",
+      "id": "13c2e937-ba4d-448f-82e6-f65db4815861",
       "name": "Archer-A",
       "slot": 0,
       "local": true
     },
     {
-      "id": "a2258815-7b35-4632-b857-b030ecc0eef9",
+      "id": "9b6fca1e-2f70-4fd0-8aac-c0d0c88a0047",
       "name": "Archer-B",
       "slot": 1,
       "local": false
@@ -20,27 +20,27 @@
     1
   ],
   "scoresBefore": {
-    "32139a34-90be-4352-8676-d6bce8234241": 0,
-    "a2258815-7b35-4632-b857-b030ecc0eef9": 0
+    "13c2e937-ba4d-448f-82e6-f65db4815861": 0,
+    "9b6fca1e-2f70-4fd0-8aac-c0d0c88a0047": 0
   },
   "scoresAfter": {
-    "a2258815-7b35-4632-b857-b030ecc0eef9": 0,
-    "32139a34-90be-4352-8676-d6bce8234241": 1
+    "9b6fca1e-2f70-4fd0-8aac-c0d0c88a0047": 0,
+    "13c2e937-ba4d-448f-82e6-f65db4815861": 1
   },
   "victimHealthAfter": 0,
-  "latencyMs": 16.5,
+  "latencyMs": 155.5,
   "cap": {
     "accepted": 10,
     "eleventhRejected": true
   },
   "round": {
-    "winnerId": "ac7cb44d-54a6-40f6-9762-277c153d8a29",
+    "winnerId": "57171d26-bd1e-40b3-bce0-270b569329e8",
     "scores": {
-      "a7761a50-ec84-478c-93f7-ad3c27cc038b": 0,
-      "ac7cb44d-54a6-40f6-9762-277c153d8a29": 20
+      "905d9a68-9605-4191-8dd9-f48125e892e8": 0,
+      "57171d26-bd1e-40b3-bce0-270b569329e8": 20
     },
     "resetRound": 2,
-    "resetDelayMs": 5020
+    "resetDelayMs": 5242
   },
   "consoleErrors": []
 }
