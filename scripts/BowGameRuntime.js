@@ -4,7 +4,6 @@ import { preloadHumanAsset, attachHumanAsset } from './BowHumanAsset.js';
 import { attachFirstPersonArm } from './BowHandRig.js';
 import { sampleReferenceAction, sampleReferenceTimeline, referenceScreenPoint, referenceRotation, referenceArrow, blendReferencePoses, BOW_RELEASE_SECONDS } from './BowReferenceClip.js';
 import { BowArrowTrails } from './BowArrowTrail.js';
-import { BowPerformance } from './BowPerformance.js';
 import { batchBowScene } from './BowSceneBatch.js';
 import { BowAudio } from './BowAudio.js';
 import { BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover } from './BowPhysics.js';
@@ -33,6 +32,7 @@ export class BowGameRuntime {
     isPaused;
     ownsArena;
     session;
+    performanceStats;
     lifecycle = 0;
     preview = null;
     inspect(params) {
@@ -85,7 +85,6 @@ export class BowGameRuntime {
     arrows = [];
     remotePlayers = new Map();
     trails = null;
-    performanceStats = null;
     sceneBatch = null;
     lastHudUpdate = -1;
     player = new Vector3();
@@ -117,6 +116,7 @@ export class BowGameRuntime {
     accumulator = 0;
     overlay = null;
     hud = {};
+    hudValues = Object.create(null);
     bow = new Group();
     heldArrow = new Group();
     arm = new Group();
@@ -137,12 +137,13 @@ export class BowGameRuntime {
     networkSeq = 0;
     arrowSeq = 0;
     receivedHits = new Set();
-    constructor(viewer, config, arenaRoot, isPaused = () => false, ownsArena = false, session = null) {
+    constructor(viewer, config, arenaRoot, isPaused = () => false, ownsArena = false, session = null, performanceStats = null) {
         this.viewer = viewer;
         this.arenaRoot = arenaRoot;
         this.isPaused = isPaused;
         this.ownsArena = ownsArena;
         this.session = session;
+        this.performanceStats = performanceStats;
         this.config = config;
     }
     isConfigured() { return !!this.config; }
@@ -220,7 +221,7 @@ export class BowGameRuntime {
             camera.controls.enabled = false;
         camera.fov = 76;
         camera.updateProjectionMatrix?.();
-        this.performanceStats = new BowPerformance(viewer);
+        this.performanceStats?.attachViewer(viewer);
         return this.getState();
     }
     stop() {
@@ -231,8 +232,7 @@ export class BowGameRuntime {
         this.networkSnapshot = null;
         this.remotePlayers.clear();
         this.receivedHits.clear();
-        this.performanceStats?.dispose();
-        this.performanceStats = null;
+        this.performanceStats?.detachViewer();
         window.removeEventListener('keydown', this.onKeyDown, true);
         window.removeEventListener('keyup', this.onKeyUp, true);
         window.removeEventListener('mousedown', this.onMouseDown, true);
@@ -251,6 +251,7 @@ export class BowGameRuntime {
         this.overlay?.remove();
         this.overlay = null;
         this.hud = {};
+        this.hudValues = Object.create(null);
         this.trails?.dispose();
         this.trails = null;
         this.sceneBatch?.dispose();
@@ -611,7 +612,6 @@ export class BowGameRuntime {
             for (let i = 0; i < this.bots.length; i++)
                 this.sounds?.draw(i, active && this.bots[i].hp > 0 ? this.bots[i].draw : 0, this.bots[i].mesh.position);
         }
-        this.viewer.setDirty();
         this.performanceStats?.record(time, frameMs, performance.now() - start, active);
         return true;
     }
@@ -959,11 +959,19 @@ export class BowGameRuntime {
         }
         this.trails?.update(this.elapsed, camera.position);
     }
+    setHudText(id, value) { const key = `text:${id}`; if (this.hudValues[key] === value)
+        return; this.hudValues[key] = value; this.hud[id].textContent = value; }
+    setHudStyle(id, property, value) { const key = `style:${id}:${property}`; if (this.hudValues[key] === value)
+        return; this.hudValues[key] = value; this.hud[id].style.setProperty(property, value); }
+    setHudDisabled(id, value) { const key = `disabled:${id}`; if (this.hudValues[key] === value)
+        return; this.hudValues[key] = value; this.hud[id].disabled = value; }
     makeHud() {
+        this.hudValues = Object.create(null);
         const overlay = document.createElement('div');
         overlay.id = 'kite3d-bow-game-hud';
         overlay.style.cssText = 'position:fixed;z-index:10000;pointer-events:none;color:#ecece3;font:13px system-ui,sans-serif;overflow:hidden;';
-        const add = (id, style, text = '') => { const e = document.createElement('div'); e.style.cssText = style; e.textContent = text; overlay.append(e); this.hud[id] = e; return e; };
+        this.hud.overlay = overlay;
+        const add = (id, style, text = '') => { const e = document.createElement('div'); e.style.cssText = style; e.textContent = text; overlay.append(e); this.hud[id] = e; this.hudValues[`text:${id}`] = text; return e; };
         add('brand', 'position:absolute;left:28px;top:24px;font-size:13px;letter-spacing:5px;font-weight:800;', 'TIMBER / ASH');
         add('sub', 'position:absolute;left:29px;top:46px;font-size:10px;letter-spacing:2px;color:#c8c9b7;', 'BOW DEATHMATCH · LOCAL BOT ARENA');
         add('score', 'position:absolute;top:24px;right:28px;text-align:right;font-size:15px;font-weight:700;');
@@ -984,6 +992,7 @@ export class BowGameRuntime {
         title.textContent = 'TIMBER / ASH';
         modal.append(title);
         this.hud.title = title;
+        this.hudValues['text:title'] = 'TIMBER / ASH';
         const description = document.createElement('div');
         description.style.cssText = 'color:#bfc6b4;line-height:1.8;font-size:13px;white-space:pre-line;margin-bottom:24px';
         modal.append(description);
@@ -1004,6 +1013,7 @@ export class BowGameRuntime {
             this.restart(); this.enter(); };
         modal.append(button);
         this.hud.button = button;
+        this.hudValues['text:button'] = 'ENTER ARENA';
         if (this.session) {
             const solo = document.createElement('button');
             solo.textContent = 'PLAY SOLO';
@@ -1020,42 +1030,45 @@ export class BowGameRuntime {
         if (!this.overlay)
             return;
         const rect = this.viewer.canvas.getBoundingClientRect();
-        Object.assign(this.overlay.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+        this.setHudStyle('overlay', 'left', `${rect.left}px`);
+        this.setHudStyle('overlay', 'top', `${rect.top}px`);
+        this.setHudStyle('overlay', 'width', `${rect.width}px`);
+        this.setHudStyle('overlay', 'height', `${rect.height}px`);
         const snapshot = this.networkSnapshot, online = !!this.session, limit = online ? snapshot?.scoreLimit ?? 20 : this.config.scoreLimit;
-        this.hud.score.textContent = `${String(this.kills).padStart(2, '0')} / ${limit}  ELIMINATIONS`;
+        this.setHudText('score', `${String(this.kills).padStart(2, '0')} / ${limit}  ELIMINATIONS`);
         if (online) {
             const players = snapshot?.players ?? [];
-            this.hud.board.textContent = [...players].sort((a, b) => a.slot - b.slot).map(player => `${player.local ? 'YOU' : player.name}    ${snapshot?.scores[player.id] ?? 0} K / ${player.deaths} D`).join('\n');
+            this.setHudText('board', [...players].sort((a, b) => a.slot - b.slot).map(player => `${player.local ? 'YOU' : player.name}    ${snapshot?.scores[player.id] ?? 0} K / ${player.deaths} D`).join('\n'));
             const latency = snapshot?.latencyMs === null || snapshot?.latencyMs === undefined ? '' : ` · ${Math.round(snapshot.latencyMs)} MS RTT`;
-            this.hud.network.textContent = `ONLINE · ${(snapshot?.status ?? 'connecting').toUpperCase()} · ${players.length}/${BOW_ROOM_CAP} PLAYERS${latency} · ROUND ${snapshot?.round ?? 1} · FIRST TO ${limit}`;
+            this.setHudText('network', `ONLINE · ${(snapshot?.status ?? 'connecting').toUpperCase()} · ${players.length}/${BOW_ROOM_CAP} PLAYERS${latency} · ROUND ${snapshot?.round ?? 1} · FIRST TO ${limit}`);
         }
         else
-            this.hud.board.textContent = this.bots.map(b => `${b.name}    ${b.kills} K / ${b.deaths} D`).join('\n');
-        this.hud.health.textContent = `${this.hp}  HP`;
-        this.hud.healthbar.style.width = `${this.hp * 1.6}px`;
-        this.hud.healthbar.style.background = this.hp < 35 ? '#c9604c' : '#b8c89a';
-        this.hud.hit.style.opacity = String(this.hit);
-        this.hud.damage.style.opacity = String(this.flash * .6);
-        this.hud.feed.textContent = this.hp <= 0 ? `YOU FELL · RESPAWNING IN ${Math.max(1, Math.ceil(this.deadUntil - this.elapsed))}` : this.elapsed < this.messageUntil ? this.message : '';
+            this.setHudText('board', this.bots.map(b => `${b.name}    ${b.kills} K / ${b.deaths} D`).join('\n'));
+        this.setHudText('health', `${this.hp}  HP`);
+        this.setHudStyle('healthbar', 'width', `${this.hp * 1.6}px`);
+        this.setHudStyle('healthbar', 'background', this.hp < 35 ? '#c9604c' : '#b8c89a');
+        this.setHudStyle('hit', 'opacity', String(this.hit));
+        this.setHudStyle('damage', 'opacity', String(this.flash * .6));
+        this.setHudText('feed', this.hp <= 0 ? `YOU FELL · RESPAWNING IN ${Math.max(1, Math.ceil(this.deadUntil - this.elapsed))}` : this.elapsed < this.messageUntil ? this.message : '');
         if (!online) {
             const show = (!this.active || !!this.winner) && !this.preview;
-            this.hud.sub.textContent = this.preview ? 'MODEL INSPECTION · R RETURN TO MATCH' : 'BOW DEATHMATCH · LOCAL BOT ARENA';
-            this.hud.modal.style.display = show ? 'block' : 'none';
-            this.hud.title.textContent = this.winner ? this.winner === 'YOU' ? 'VICTORY' : 'MATCH OVER' : 'TIMBER / ASH';
-            this.hud.description.textContent = this.winner ? `${this.winner} reached ${this.config.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths` : `${this.config.botCount} hunters. First to ${this.config.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`;
-            this.hud.button.textContent = this.winner ? 'PLAY AGAIN' : this.elapsed > 0 ? 'RESUME HUNT' : 'ENTER ARENA';
+            this.setHudText('sub', this.preview ? 'MODEL INSPECTION · R RETURN TO MATCH' : 'BOW DEATHMATCH · LOCAL BOT ARENA');
+            this.setHudStyle('modal', 'display', show ? 'block' : 'none');
+            this.setHudText('title', this.winner ? this.winner === 'YOU' ? 'VICTORY' : 'MATCH OVER' : 'TIMBER / ASH');
+            this.setHudText('description', this.winner ? `${this.winner} reached ${this.config.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths` : `${this.config.botCount} hunters. First to ${this.config.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`);
+            this.setHudText('button', this.winner ? 'PLAY AGAIN' : this.elapsed > 0 ? 'RESUME HUNT' : 'ENTER ARENA');
             return;
         }
         const status = snapshot?.status ?? 'connecting', blocked = status === 'full' || status === 'reconnecting' || status === 'disconnected' || status === 'connecting', show = !this.active || !!this.winner || blocked;
-        this.hud.sub.textContent = 'BOW DEATHMATCH · ONLINE · NO BOTS';
-        this.hud.modal.style.display = show ? 'block' : 'none';
-        this.hud.title.textContent = status === 'full' ? 'SERVER FULL' : this.winner ? this.winner === 'YOU' ? 'VICTORY' : 'ROUND OVER' : 'TIMBER / ASH';
-        this.hud.description.textContent = status === 'full' ? `The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.` : status === 'reconnecting' || status === 'disconnected' ? 'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.' : status === 'connecting' ? 'Connecting to the main room…' : this.winner ? `${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.` : `${snapshot?.players.length ?? 0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`;
-        const button = this.hud.button;
-        button.disabled = blocked || !!this.winner;
-        button.style.opacity = button.disabled ? '.55' : '1';
-        button.textContent = this.winner ? 'ROUND RESTARTS SOON' : blocked ? status === 'full' ? 'ROOM UNAVAILABLE' : 'CONNECTING…' : this.elapsed > 0 ? 'RESUME HUNT' : 'ENTER ARENA';
-        this.hud.name.style.display = this.winner || status === 'full' ? 'none' : 'block';
-        this.hud.solo.style.display = blocked ? 'block' : 'none';
+        this.setHudText('sub', 'BOW DEATHMATCH · ONLINE · NO BOTS');
+        this.setHudStyle('modal', 'display', show ? 'block' : 'none');
+        this.setHudText('title', status === 'full' ? 'SERVER FULL' : this.winner ? this.winner === 'YOU' ? 'VICTORY' : 'ROUND OVER' : 'TIMBER / ASH');
+        this.setHudText('description', status === 'full' ? `The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.` : status === 'reconnecting' || status === 'disconnected' ? 'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.' : status === 'connecting' ? 'Connecting to the main room…' : this.winner ? `${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.` : `${snapshot?.players.length ?? 0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`);
+        const disabled = blocked || !!this.winner;
+        this.setHudDisabled('button', disabled);
+        this.setHudStyle('button', 'opacity', disabled ? '.55' : '1');
+        this.setHudText('button', this.winner ? 'ROUND RESTARTS SOON' : blocked ? status === 'full' ? 'ROOM UNAVAILABLE' : 'CONNECTING…' : this.elapsed > 0 ? 'RESUME HUNT' : 'ENTER ARENA');
+        this.setHudStyle('name', 'display', this.winner || status === 'full' ? 'none' : 'block');
+        this.setHudStyle('solo', 'display', blocked ? 'block' : 'none');
     }
 }

@@ -5,7 +5,7 @@ import {resolve} from 'node:path';
 import {chromium} from '@playwright/test';
 
 const root=resolve(new URL('../..',import.meta.url).pathname);
-const label=process.env.BOWGAME_FLICKER_LABEL??'before';
+const label=process.env.BOWGAME_FLICKER_LABEL??'local';
 const evidenceDir=resolve(root,'evidence');
 let worker=null,browser=null;
 

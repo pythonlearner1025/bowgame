@@ -35,6 +35,10 @@ test('two Chromium pages play, room limits hold, and rounds reset',async({browse
   await pageB.waitForTimeout(750);await pageB.evaluate(()=>window.viewer.timeline.stop());await pageA.evaluate(()=>window.viewer.timeline.start());
   await pageA.waitForFunction(()=>Math.abs(window.__KITE_BOW_GAME__.getState().remotePlayers[0].position.z-10)<1,{timeout:15_000});
   if(mode==='live')await pageA.locator('#bow-canvas').screenshot({path:resolve(root,'evidence/online-two-players.png')});
+  await pageA.keyboard.press('F8');await expect(pageA.locator('#kite3d-bow-debug')).toBeVisible();
+  const telemetry=await pageA.evaluate(()=>window.__KITE_BOW_TELEMETRY__.exportData()),lastSample=telemetry.samples.at(-1),sum=(direction)=>telemetry.samples.reduce((total,sample)=>total+(sample.network[direction].byType.state?.count??0),0);
+  expect(telemetry.schemaVersion).toBe(1);expect(telemetry.samples.length).toBeGreaterThan(0);expect(telemetry.samples.some(sample=>sample.frameTimeMs.count>0)).toBe(true);expect(sum('inbound')).toBeGreaterThan(0);expect(sum('outbound')).toBeGreaterThan(0);expect(lastSample.remoteStateStaleness.players).toHaveLength(1);
+  const downloadPromise=pageA.waitForEvent('download');await pageA.keyboard.press('F9');const download=await downloadPromise;expect(download.suggestedFilename()).toMatch(/^bowgame-telemetry-.*\.json$/);await pageA.keyboard.press('F8');
   await pageA.evaluate(()=>window.viewer.timeline.stop());
   await pageA.evaluate(()=>window.__KITE_BOW_SESSION__.ping());await pageA.waitForFunction(()=>window.__KITE_BOW_GAME__.getState().network.latencyMs!==null);
   const scoresBefore={...beforeA.network.scores};

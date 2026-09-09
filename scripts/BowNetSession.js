@@ -3,6 +3,7 @@ import { BOW_PROTOCOL_VERSION, cleanPlayerName, parseServerMessage } from './Bow
 export class BowNetSession {
     transport;
     name;
+    telemetry;
     status = 'disconnected';
     playerId = null;
     players = new Map();
@@ -17,9 +18,10 @@ export class BowNetSession {
     heartbeatTimer = null;
     attempt = 0;
     stopped = true;
-    constructor(transport, name) {
+    constructor(transport, name, telemetry = null) {
         this.transport = transport;
         this.name = name;
+        this.telemetry = telemetry;
         this.name = cleanPlayerName(name);
     }
     start() { if (!this.stopped)
@@ -59,7 +61,8 @@ export class BowNetSession {
         if (this.stopped || this.status === 'full' || this.reconnectTimer !== null)
             return;
         this.setStatus('reconnecting');
-        const delay = Math.min(30_000, 500 * 2 ** this.attempt++) * (.75 + Math.random() * .5);
+        const attempt = ++this.attempt, delay = Math.min(30_000, 500 * 2 ** (attempt - 1)) * (.75 + Math.random() * .5);
+        this.telemetry?.recordReconnect(attempt, delay);
         this.reconnectTimer = window.setTimeout(() => { this.reconnectTimer = null; this.tryConnect(true); }, delay);
     }
     onTransport = (event) => {
@@ -97,18 +100,24 @@ export class BowNetSession {
                 this.players.clear();
                 for (const player of message.roster)
                     this.players.set(player.id, { ...player, local: player.id === message.playerId, seq: -1, pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, draw: 0, anim: 'ready', deaths: 0 });
+                this.telemetry?.setRemotePlayers(message.roster.filter(player => player.id !== message.playerId).map(player => player.id));
                 break;
             }
             case 'join': {
                 const existing = this.players.get(message.playerId);
                 this.players.set(message.playerId, { id: message.playerId, name: message.name, slot: message.slot, local: message.playerId === this.playerId, seq: existing?.seq ?? -1, pos: existing?.pos ?? { x: 0, y: 0, z: 0 }, yaw: existing?.yaw ?? 0, pitch: existing?.pitch ?? 0, draw: existing?.draw ?? 0, anim: existing?.anim ?? 'ready', deaths: existing?.deaths ?? 0 });
                 this.scores[message.playerId] ??= 0;
+                if (message.playerId !== this.playerId)
+                    this.telemetry?.setRemotePlayers([...this.players.values()].filter(player => !player.local).map(player => player.id));
                 break;
             }
             case 'state': {
                 const player = this.players.get(message.playerId);
-                if (player && message.seq > player.seq)
+                if (player && message.seq > player.seq) {
                     Object.assign(player, { seq: message.seq, pos: { ...message.pos }, yaw: message.yaw, pitch: message.pitch, draw: message.draw, anim: message.anim });
+                    if (!player.local)
+                        this.telemetry?.recordRemoteState(message.playerId);
+                }
                 break;
             }
             case 'death': {
@@ -137,9 +146,11 @@ export class BowNetSession {
             case 'leave':
                 this.players.delete(message.playerId);
                 delete this.scores[message.playerId];
+                this.telemetry?.removeRemotePlayer(message.playerId);
                 break;
             case 'pong':
                 this.latencyMs = Math.max(0, performance.now() - message.sentAt);
+                this.telemetry?.recordRtt(this.latencyMs);
                 break;
         }
         this.emit(message);

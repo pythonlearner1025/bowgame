@@ -4,7 +4,7 @@ import {preloadHumanAsset, attachHumanAsset} from './BowHumanAsset.js';
 import {attachFirstPersonArm} from './BowHandRig.js';
 import {sampleReferenceAction,sampleReferenceTimeline,referenceScreenPoint,referenceRotation,referenceArrow,blendReferencePoses,BOW_RELEASE_SECONDS,type ReferencePose} from './BowReferenceClip.js';
 import {BowArrowTrails,type ArrowTrailHandle} from './BowArrowTrail.js';
-import {BowPerformance} from './BowPerformance.js';
+import type {BowPerformance} from './BowPerformance.js';
 import {batchBowScene} from './BowSceneBatch.js';
 import {BowAudio} from './BowAudio.js';
 import {BOW_DRAW_SECONDS, GRAVITY, shotSpeed, shotDamage, segmentSphere, segmentCover, moveWithCover, type Cover} from './BowPhysics.js';
@@ -48,13 +48,13 @@ export class BowGameRuntime {
         this.updateCamera();this.updateHud();this.viewer.setDirty();return this.getState();
     }
     private running=false; private config?:BowGameConfig; private root=new Group(); private bots:Bot[]=[]; private arrows:Arrow[]=[]; private remotePlayers=new Map<string,RemotePlayer>();
-    private trails:BowArrowTrails|null=null; private performanceStats:BowPerformance|null=null; private sceneBatch:ReturnType<typeof batchBowScene>|null=null; private lastHudUpdate=-1;
+    private trails:BowArrowTrails|null=null; private sceneBatch:ReturnType<typeof batchBowScene>|null=null; private lastHudUpdate=-1;
     private player=new Vector3(); private velocity=new Vector3(); private hp=100; private kills=0; private deaths=0; private deadUntil=0; private elapsed=0; private winner='';
     private yaw=0; private pitch=0; private keys=new Set<string>(); private drawing=false; private charge=0; private recoil=0; private releaseTime=-1; private releasedCharge=0; private leftArm?:ArmRig; private rightArm?:ArmRig; private posePhase='ready'; private cooldown=0; private aiming=false; private aimBlend=0; private queuedDraw=false; private releaseFrom:ReferencePose|null=null; private cancelFrom:ReferencePose|null=null; private cancelTime=-1;
-    private accumulator=0; private overlay:HTMLDivElement|null=null; private hud:Record<string,HTMLElement>={}; private bow=new Group(); private heldArrow=new Group(); private arm=new Group(); private hand=new Group();
+    private accumulator=0; private overlay:HTMLDivElement|null=null; private hud:Record<string,HTMLElement>={}; private hudValues:Record<string,string|boolean>=Object.create(null); private bow=new Group(); private heldArrow=new Group(); private arm=new Group(); private hand=new Group();
     private cameraRestore:any; private sceneRestore:any; private hidden:{object:any;visible:boolean}[]=[]; private flash=0; private hit=0; private message=''; private messageUntil=0; private active=false; private hadPointerLock=false; private sounds:BowAudio|null=null;
     private networkSnapshot:NetSnapshot|null=null;private networkUnsubscribe:(()=>void)|null=null;private networkAccumulator=0;private networkSeq=0;private arrowSeq=0;private receivedHits=new Set<string>();
-    constructor(private viewer:ThreeViewer,config?:BowGameConfig,private arenaRoot?:Group,private isPaused:()=>boolean=()=>false,private ownsArena=false,private session:BowNetSession|null=null){this.config=config;}
+    constructor(private viewer:ThreeViewer,config?:BowGameConfig,private arenaRoot?:Group,private isPaused:()=>boolean=()=>false,private ownsArena=false,private session:BowNetSession|null=null,private performanceStats:BowPerformance|null=null){this.config=config;}
     isConfigured(){return !!this.config;}
     async start(){
         if(this.running)this.stop();const lifecycle=++this.lifecycle;if(!this.config)return this.getState();
@@ -80,15 +80,15 @@ export class BowGameRuntime {
         window.addEventListener('keydown',this.onKeyDown,true);window.addEventListener('keyup',this.onKeyUp,true);window.addEventListener('mousedown',this.onMouseDown,true);window.addEventListener('mouseup',this.onMouseUp,true);window.addEventListener('mousemove',this.onMouseMove,true);window.addEventListener('blur',this.onBlur);document.addEventListener('pointerlockchange',this.onLock);viewer.canvas.addEventListener('contextmenu',this.onContext);
         if(camera.controls)camera.controls.enabled=false;
         (camera as any).fov=76;(camera as any).updateProjectionMatrix?.();
-        this.performanceStats=new BowPerformance(viewer);return this.getState();
+        this.performanceStats?.attachViewer(viewer);return this.getState();
     }
     stop(){
         this.lifecycle++;
         this.networkUnsubscribe?.();this.networkUnsubscribe=null;this.session?.stop();this.networkSnapshot=null;this.remotePlayers.clear();this.receivedHits.clear();
-        this.performanceStats?.dispose();this.performanceStats=null;
+        this.performanceStats?.detachViewer();
         window.removeEventListener('keydown',this.onKeyDown,true);window.removeEventListener('keyup',this.onKeyUp,true);window.removeEventListener('mousedown',this.onMouseDown,true);window.removeEventListener('mouseup',this.onMouseUp,true);window.removeEventListener('mousemove',this.onMouseMove,true);window.removeEventListener('blur',this.onBlur);document.removeEventListener('pointerlockchange',this.onLock);this.viewer.canvas.removeEventListener('contextmenu',this.onContext);
         if(document.pointerLockElement===this.viewer.canvas)document.exitPointerLock();
-        this.keys.clear();this.preview=null;this.active=false;this.hadPointerLock=false;this.running=false;this.overlay?.remove();this.overlay=null;this.hud={};
+        this.keys.clear();this.preview=null;this.active=false;this.hadPointerLock=false;this.running=false;this.overlay?.remove();this.overlay=null;this.hud={};this.hudValues=Object.create(null);
         this.trails?.dispose();this.trails=null;this.sceneBatch?.dispose();this.sceneBatch=null;disposeGroup(this.root);this.arrows=[];this.bots=[];this.hidden.forEach(s=>s.object.visible=s.visible);this.hidden=[];
         const viewer=this.viewer;if(viewer&&this.cameraRestore){const c=viewer.scene.mainCamera,s=this.cameraRestore;c.position.copy(s.position);c.quaternion.copy(s.quaternion);if(s.target)c.target?.copy(s.target);if(c.controls)c.controls.enabled=s.controls;(c as any).fov=s.fov;(c as any).updateProjectionMatrix?.();this.cameraRestore=null;}
         if(viewer&&this.sceneRestore){viewer.scene.background=this.sceneRestore.background;viewer.scene.fog=this.sceneRestore.fog;viewer.renderManager.renderScale=this.sceneRestore.renderScale;this.sceneRestore=null;viewer.setDirty();}
@@ -203,7 +203,6 @@ export class BowGameRuntime {
         for(const bot of this.bots)if(bot.hp>0)this.updateBotPose(bot,bot.draw,bot.walk??0,false,bot.release);
         for(const player of this.remotePlayers.values())if(player.hp>0){this.updateBotPose(player,player.draw,player.walk??0,false,player.release);player.bow.rotation.x+=player.targetPitch*.25;}
         this.updateCamera();if(time-this.lastHudUpdate>33){this.updateHud();this.lastHudUpdate=time;this.sounds?.draw(-1,active&&this.hp>0&&this.drawing?this.charge:0);for(let i=0;i<this.bots.length;i++)this.sounds?.draw(i,active&&this.bots[i].hp>0?this.bots[i].draw:0,this.bots[i].mesh.position);}
-        this.viewer.setDirty();
         this.performanceStats?.record(time,frameMs,performance.now()-start,active);
         return true;
     }
@@ -307,9 +306,13 @@ export class BowGameRuntime {
 
     }
 
+    private setHudText(id:string,value:string){const key=`text:${id}`;if(this.hudValues[key]===value)return;this.hudValues[key]=value;this.hud[id].textContent=value;}
+    private setHudStyle(id:string,property:string,value:string){const key=`style:${id}:${property}`;if(this.hudValues[key]===value)return;this.hudValues[key]=value;this.hud[id].style.setProperty(property,value);}
+    private setHudDisabled(id:string,value:boolean){const key=`disabled:${id}`;if(this.hudValues[key]===value)return;this.hudValues[key]=value;(this.hud[id] as HTMLButtonElement).disabled=value;}
     private makeHud(){
-        const overlay=document.createElement('div');overlay.id='kite3d-bow-game-hud';overlay.style.cssText='position:fixed;z-index:10000;pointer-events:none;color:#ecece3;font:13px system-ui,sans-serif;overflow:hidden;';
-        const add=(id:string,style:string,text='')=>{const e=document.createElement('div');e.style.cssText=style;e.textContent=text;overlay.append(e);this.hud[id]=e;return e;};
+        this.hudValues=Object.create(null);
+        const overlay=document.createElement('div');overlay.id='kite3d-bow-game-hud';overlay.style.cssText='position:fixed;z-index:10000;pointer-events:none;color:#ecece3;font:13px system-ui,sans-serif;overflow:hidden;';this.hud.overlay=overlay;
+        const add=(id:string,style:string,text='')=>{const e=document.createElement('div');e.style.cssText=style;e.textContent=text;overlay.append(e);this.hud[id]=e;this.hudValues[`text:${id}`]=text;return e;};
         add('brand','position:absolute;left:28px;top:24px;font-size:13px;letter-spacing:5px;font-weight:800;','TIMBER / ASH');add('sub','position:absolute;left:29px;top:46px;font-size:10px;letter-spacing:2px;color:#c8c9b7;','BOW DEATHMATCH · LOCAL BOT ARENA');
         add('score','position:absolute;top:24px;right:28px;text-align:right;font-size:15px;font-weight:700;');add('board','position:absolute;right:28px;top:56px;line-height:23px;color:#d0d0c4;white-space:pre;text-align:right;font-size:11px;');
         if(this.session)add('network','position:absolute;left:29px;top:65px;font-size:10px;letter-spacing:1.2px;color:#d6cfa8;','ONLINE · CONNECTING');
@@ -319,22 +322,22 @@ export class BowGameRuntime {
         add('help','position:absolute;bottom:17px;left:28px;right:28px;font-size:10px;color:#d8dacb;letter-spacing:.7px;','WASD MOVE     SHIFT SPRINT     SPACE JUMP     HOLD LMB DRAW / RELEASE FIRE     RMB AIM     R RESTART     M MUTE     ESC PAUSE');
         add('damage','position:absolute;inset:0;box-shadow:inset 0 0 100px 30px #a02b22;opacity:0;');
         const modal=add('modal','position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,85%);background:rgba(22,27,23,.92);border:1px solid #727564;padding:32px;text-align:center;pointer-events:auto;box-shadow:0 20px 70px #0008;');
-        const title=document.createElement('div');title.style.cssText='font-size:27px;font-weight:800;letter-spacing:5px;margin-bottom:12px';title.textContent='TIMBER / ASH';modal.append(title);this.hud.title=title;
+        const title=document.createElement('div');title.style.cssText='font-size:27px;font-weight:800;letter-spacing:5px;margin-bottom:12px';title.textContent='TIMBER / ASH';modal.append(title);this.hud.title=title;this.hudValues['text:title']='TIMBER / ASH';
         const description=document.createElement('div');description.style.cssText='color:#bfc6b4;line-height:1.8;font-size:13px;white-space:pre-line;margin-bottom:24px';modal.append(description);this.hud.description=description;
         if(this.session){const input=document.createElement('input');input.setAttribute('aria-label','Archer name');input.maxLength=24;input.value=this.session.getName();input.style.cssText='display:block;width:100%;margin:-6px 0 18px;padding:11px 12px;background:#111713;color:#ecece3;border:1px solid #727564;text-align:center;font:700 13px system-ui,sans-serif;letter-spacing:1px;outline:none';modal.append(input);this.hud.name=input;}
-        const button=document.createElement('button');button.textContent='ENTER ARENA';button.style.cssText='background:#bdc593;border:0;padding:13px 26px;color:#22291b;font-weight:800;letter-spacing:2px;cursor:pointer';button.onclick=()=>{if(this.winner&&!this.session)this.restart();this.enter();};modal.append(button);this.hud.button=button;
+        const button=document.createElement('button');button.textContent='ENTER ARENA';button.style.cssText='background:#bdc593;border:0;padding:13px 26px;color:#22291b;font-weight:800;letter-spacing:2px;cursor:pointer';button.onclick=()=>{if(this.winner&&!this.session)this.restart();this.enter();};modal.append(button);this.hud.button=button;this.hudValues['text:button']='ENTER ARENA';
         if(this.session){const solo=document.createElement('button');solo.textContent='PLAY SOLO';solo.style.cssText='display:none;margin:14px auto 0;background:transparent;border:1px solid #9da283;padding:10px 20px;color:#d8dacb;font-weight:700;letter-spacing:2px;cursor:pointer';solo.onclick=()=>{const url=new URL(location.href);url.searchParams.delete('online');url.searchParams.set('solo','1');location.href=url.href;};modal.append(solo);this.hud.solo=solo;}
         (this.viewer.container??document.body).append(overlay);this.overlay=overlay;this.updateHud();
     }
-    private updateHud(){if(!this.overlay)return;const rect=this.viewer.canvas.getBoundingClientRect();Object.assign(this.overlay.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${rect.width}px`,height:`${rect.height}px`});
+    private updateHud(){if(!this.overlay)return;const rect=this.viewer.canvas.getBoundingClientRect();this.setHudStyle('overlay','left',`${rect.left}px`);this.setHudStyle('overlay','top',`${rect.top}px`);this.setHudStyle('overlay','width',`${rect.width}px`);this.setHudStyle('overlay','height',`${rect.height}px`);
         const snapshot=this.networkSnapshot,online=!!this.session,limit=online?snapshot?.scoreLimit??20:this.config!.scoreLimit;
-        this.hud.score.textContent=`${String(this.kills).padStart(2,'0')} / ${limit}  ELIMINATIONS`;
-        if(online){const players=snapshot?.players??[];this.hud.board.textContent=[...players].sort((a,b)=>a.slot-b.slot).map(player=>`${player.local?'YOU':player.name}    ${snapshot?.scores[player.id]??0} K / ${player.deaths} D`).join('\n');const latency=snapshot?.latencyMs===null||snapshot?.latencyMs===undefined?'':` · ${Math.round(snapshot.latencyMs)} MS RTT`;this.hud.network.textContent=`ONLINE · ${(snapshot?.status??'connecting').toUpperCase()} · ${players.length}/${BOW_ROOM_CAP} PLAYERS${latency} · ROUND ${snapshot?.round??1} · FIRST TO ${limit}`;}
-        else this.hud.board.textContent=this.bots.map(b=>`${b.name}    ${b.kills} K / ${b.deaths} D`).join('\n');
-        this.hud.health.textContent=`${this.hp}  HP`;this.hud.healthbar.style.width=`${this.hp*1.6}px`;this.hud.healthbar.style.background=this.hp<35?'#c9604c':'#b8c89a';this.hud.hit.style.opacity=String(this.hit);this.hud.damage.style.opacity=String(this.flash*.6);this.hud.feed.textContent=this.hp<=0?`YOU FELL · RESPAWNING IN ${Math.max(1,Math.ceil(this.deadUntil-this.elapsed))}`:this.elapsed<this.messageUntil?this.message:'';
-        if(!online){const show=(!this.active||!!this.winner)&&!this.preview;this.hud.sub.textContent=this.preview?'MODEL INSPECTION · R RETURN TO MATCH':'BOW DEATHMATCH · LOCAL BOT ARENA';this.hud.modal.style.display=show?'block':'none';this.hud.title.textContent=this.winner?this.winner==='YOU'?'VICTORY':'MATCH OVER':'TIMBER / ASH';this.hud.description.textContent=this.winner?`${this.winner} reached ${this.config!.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths`:`${this.config!.botCount} hunters. First to ${this.config!.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`;this.hud.button.textContent=this.winner?'PLAY AGAIN':this.elapsed>0?'RESUME HUNT':'ENTER ARENA';return;}
-        const status=snapshot?.status??'connecting',blocked=status==='full'||status==='reconnecting'||status==='disconnected'||status==='connecting',show=!this.active||!!this.winner||blocked;this.hud.sub.textContent='BOW DEATHMATCH · ONLINE · NO BOTS';this.hud.modal.style.display=show?'block':'none';this.hud.title.textContent=status==='full'?'SERVER FULL':this.winner?this.winner==='YOU'?'VICTORY':'ROUND OVER':'TIMBER / ASH';
-        this.hud.description.textContent=status==='full'?`The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.`:status==='reconnecting'||status==='disconnected'?'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.':status==='connecting'?'Connecting to the main room…':this.winner?`${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.`:`${snapshot?.players.length??0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`;
-        const button=this.hud.button as HTMLButtonElement;button.disabled=blocked||!!this.winner;button.style.opacity=button.disabled?'.55':'1';button.textContent=this.winner?'ROUND RESTARTS SOON':blocked?status==='full'?'ROOM UNAVAILABLE':'CONNECTING…':this.elapsed>0?'RESUME HUNT':'ENTER ARENA';this.hud.name.style.display=this.winner||status==='full'?'none':'block';this.hud.solo.style.display=blocked?'block':'none';
+        this.setHudText('score',`${String(this.kills).padStart(2,'0')} / ${limit}  ELIMINATIONS`);
+        if(online){const players=snapshot?.players??[];this.setHudText('board',[...players].sort((a,b)=>a.slot-b.slot).map(player=>`${player.local?'YOU':player.name}    ${snapshot?.scores[player.id]??0} K / ${player.deaths} D`).join('\n'));const latency=snapshot?.latencyMs===null||snapshot?.latencyMs===undefined?'':` · ${Math.round(snapshot.latencyMs)} MS RTT`;this.setHudText('network',`ONLINE · ${(snapshot?.status??'connecting').toUpperCase()} · ${players.length}/${BOW_ROOM_CAP} PLAYERS${latency} · ROUND ${snapshot?.round??1} · FIRST TO ${limit}`);}
+        else this.setHudText('board',this.bots.map(b=>`${b.name}    ${b.kills} K / ${b.deaths} D`).join('\n'));
+        this.setHudText('health',`${this.hp}  HP`);this.setHudStyle('healthbar','width',`${this.hp*1.6}px`);this.setHudStyle('healthbar','background',this.hp<35?'#c9604c':'#b8c89a');this.setHudStyle('hit','opacity',String(this.hit));this.setHudStyle('damage','opacity',String(this.flash*.6));this.setHudText('feed',this.hp<=0?`YOU FELL · RESPAWNING IN ${Math.max(1,Math.ceil(this.deadUntil-this.elapsed))}`:this.elapsed<this.messageUntil?this.message:'');
+        if(!online){const show=(!this.active||!!this.winner)&&!this.preview;this.setHudText('sub',this.preview?'MODEL INSPECTION · R RETURN TO MATCH':'BOW DEATHMATCH · LOCAL BOT ARENA');this.setHudStyle('modal','display',show?'block':'none');this.setHudText('title',this.winner?this.winner==='YOU'?'VICTORY':'MATCH OVER':'TIMBER / ASH');this.setHudText('description',this.winner?`${this.winner} reached ${this.config!.scoreLimit} eliminations.\nYour score: ${this.kills} kills / ${this.deaths} deaths`:`${this.config!.botCount} hunters. First to ${this.config!.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`);this.setHudText('button',this.winner?'PLAY AGAIN':this.elapsed>0?'RESUME HUNT':'ENTER ARENA');return;}
+        const status=snapshot?.status??'connecting',blocked=status==='full'||status==='reconnecting'||status==='disconnected'||status==='connecting',show=!this.active||!!this.winner||blocked;this.setHudText('sub','BOW DEATHMATCH · ONLINE · NO BOTS');this.setHudStyle('modal','display',show?'block':'none');this.setHudText('title',status==='full'?'SERVER FULL':this.winner?this.winner==='YOU'?'VICTORY':'ROUND OVER':'TIMBER / ASH');
+        this.setHudText('description',status==='full'?`The main room already has ${BOW_ROOM_CAP} archers.\nTry again later or continue in solo mode.`:status==='reconnecting'||status==='disconnected'?'Connection lost. Reconnecting with backoff.\nYou can continue immediately in solo mode.':status==='connecting'?'Connecting to the main room…':this.winner?`${this.winner} reached ${limit} eliminations.\nThe next round begins in about 5 seconds.`:`${snapshot?.players.length??0} archers online. First to ${limit} eliminations.\nNo bots online. Hits use the trusted-friends model.\nHeadshots deal extra damage. Respawn is automatic.`);
+        const disabled=blocked||!!this.winner;this.setHudDisabled('button',disabled);this.setHudStyle('button','opacity',disabled?'.55':'1');this.setHudText('button',this.winner?'ROUND RESTARTS SOON':blocked?status==='full'?'ROOM UNAVAILABLE':'CONNECTING…':this.elapsed>0?'RESUME HUNT':'ENTER ARENA');this.setHudStyle('name','display',this.winner||status==='full'?'none':'block');this.setHudStyle('solo','display',blocked?'block':'none');
     }
 }

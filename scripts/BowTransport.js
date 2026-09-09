@@ -1,10 +1,13 @@
+import { utf8ByteLength } from './BowPerformance.js';
 export class WebSocketTransport {
     url;
+    telemetry;
     socket = null;
     handlers = new Set();
     manuallyClosed = false;
-    constructor(url) {
+    constructor(url, telemetry = null) {
         this.url = url;
+        this.telemetry = telemetry;
     }
     connect() {
         this.manuallyClosed = false;
@@ -21,13 +24,16 @@ export class WebSocketTransport {
                 if (typeof event.data !== 'string')
                     return;
                 try {
-                    this.emit({ kind: 'message', message: JSON.parse(event.data) });
+                    const message = JSON.parse(event.data);
+                    this.telemetry?.recordNetwork('inbound', message.type ?? 'invalid', utf8ByteLength(event.data));
+                    this.emit({ kind: 'message', message });
                 }
                 catch { }
             });
             socket.addEventListener('close', event => {
                 if (this.socket === socket)
                     this.socket = null;
+                this.telemetry?.recordSocketClose(event.code, event.wasClean);
                 if (!opened)
                     reject(new Error(`WebSocket rejected (${event.code || 'network'})`));
                 if (!this.manuallyClosed)
@@ -38,7 +44,7 @@ export class WebSocketTransport {
         });
     }
     send(message) { if (this.socket?.readyState !== WebSocket.OPEN)
-        return false; this.socket.send(JSON.stringify(message)); return true; }
+        return false; const encoded = JSON.stringify(message); this.socket.send(encoded); this.telemetry?.recordNetwork('outbound', message.type, utf8ByteLength(encoded)); return true; }
     onMessage(handler) { this.handlers.add(handler); return () => this.handlers.delete(handler); }
     close() { this.manuallyClosed = true; this.socket?.close(1000, 'Client closed'); this.socket = null; }
     emit(event) { for (const handler of this.handlers)
