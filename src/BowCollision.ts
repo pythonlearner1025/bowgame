@@ -21,6 +21,7 @@ export class BowCollision {
     private normal = new Vector3();
     private faceNormal = new Vector3();
     private ray = new Ray();
+    private axisRay = new Ray(new Vector3(), new Vector3(0,1,0));
     private direction = new Vector3();
     private steps = 0;
     private totalMs = 0;
@@ -77,6 +78,7 @@ export class BowCollision {
     private setCapsule(feet: Vector3, radius: number) {
         this.line.start.copy(feet).y += radius;
         this.line.end.copy(feet).y += PLAYER_HEIGHT - radius;
+        this.axisRay.origin.copy(this.line.start);
         this.box.makeEmpty().expandByPoint(this.line.start).expandByPoint(this.line.end).expandByScalar(radius + SKIN);
     }
 
@@ -134,6 +136,9 @@ export class BowCollision {
         let depth = 0;
         this.bvh.shapecast({intersectsBounds: box => box.intersectsBox(this.box), intersectsTriangle: triangle => {
             depth = Math.max(depth, radius - triangle.closestPointToSegment(this.line, this.trianglePoint, this.capsulePoint));
+            // Endpoint/edge distance alone misses a triangle pierced through its interior by the capsule axis.
+            const crossing = this.axisRay.intersectTriangle(triangle.a, triangle.b, triangle.c, false, this.trianglePoint);
+            if (crossing && crossing.y <= this.line.end.y) depth = Math.max(depth, radius);
             return false;
         }});
         return depth;

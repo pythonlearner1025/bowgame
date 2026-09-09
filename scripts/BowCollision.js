@@ -19,6 +19,7 @@ export class BowCollision {
     normal = new Vector3();
     faceNormal = new Vector3();
     ray = new Ray();
+    axisRay = new Ray(new Vector3(), new Vector3(0, 1, 0));
     direction = new Vector3();
     steps = 0;
     totalMs = 0;
@@ -78,6 +79,7 @@ export class BowCollision {
     setCapsule(feet, radius) {
         this.line.start.copy(feet).y += radius;
         this.line.end.copy(feet).y += PLAYER_HEIGHT - radius;
+        this.axisRay.origin.copy(this.line.start);
         this.box.makeEmpty().expandByPoint(this.line.start).expandByPoint(this.line.end).expandByScalar(radius + SKIN);
     }
     /** Resolve small motion slices, project velocity for wall sliding, and classify support by face AND contact normal. */
@@ -142,6 +144,10 @@ export class BowCollision {
         let depth = 0;
         this.bvh.shapecast({ intersectsBounds: box => box.intersectsBox(this.box), intersectsTriangle: triangle => {
                 depth = Math.max(depth, radius - triangle.closestPointToSegment(this.line, this.trianglePoint, this.capsulePoint));
+                // Endpoint/edge distance alone misses a triangle pierced through its interior by the capsule axis.
+                const crossing = this.axisRay.intersectTriangle(triangle.a, triangle.b, triangle.c, false, this.trianglePoint);
+                if (crossing && crossing.y <= this.line.end.y)
+                    depth = Math.max(depth, radius);
                 return false;
             } });
         return depth;
