@@ -46,6 +46,12 @@ const RESOLUTION_STOP_DEPTH_METERS = COLLISION_SKIN_METERS * RESOLUTION_STOP_FRA
 // Segment lengths below this threshold have no stable ray direction.
 const SEGMENT_EPSILON_METERS = 1e-10;
 
+// Rendered solids carry this marker; arrows, sight lines, movement, and spawns all respect them.
+const SOLID_MARKER = 'bowSolid';
+
+// Player barriers carry this marker; only capsule movement and penetration checks respect them.
+const PLAYER_BARRIER_MARKER = 'bowPlayerBarrier';
+
 // Contact distances below this threshold use the triangle face normal directly.
 const CONTACT_NORMAL_EPSILON_METERS = 1e-9;
 
@@ -96,6 +102,7 @@ export interface BowCollisionStats {
   buildMs: number;
   triangles: number;
   solidMeshes: number;
+  barrierTriangles: number;
   steps: number;
   meanStepMs: number;
   maxStepMs: number;
@@ -135,8 +142,8 @@ function collectMeshInstance(
   }
 }
 
-// Expands every marked mesh and instanced-mesh transform into one immutable world-space buffer.
-function collectArenaGeometry(arena: Group): CollectedCollisionGeometry {
+// Expands every mesh and instanced-mesh transform carrying the marker into one world-space buffer.
+function collectMarkedGeometry(arena: Group, marker: string): CollectedCollisionGeometry {
   const vertices: number[] = [];
   const closedTriangles: number[] = [];
   const instanceMatrix = new Matrix4();
@@ -147,7 +154,7 @@ function collectArenaGeometry(arena: Group): CollectedCollisionGeometry {
   arena.traverse((object) => {
     const mesh = object as Mesh;
 
-    if (!mesh.isMesh || mesh.userData.bowSolid !== true) {
+    if (!mesh.isMesh || mesh.userData[marker] !== true) {
       return;
     }
 
@@ -177,6 +184,9 @@ export class BowCollision {
   readonly buildMs: number;
   readonly solidMeshes: number;
   readonly triangles: number;
+  readonly barrierGeometry = new BufferGeometry();
+  readonly barrierBvh: MeshBVH | null;
+  readonly barrierTriangles: number;
 
   private readonly closedTriangles: Uint8Array;
   private readonly capsuleLine = new Line3();
@@ -201,7 +211,7 @@ export class BowCollision {
    */
   constructor(arena: Group) {
     const startedAt = performance.now();
-    const collected = collectArenaGeometry(arena);
+    const collected = collectMarkedGeometry(arena, SOLID_MARKER);
 
     if (collected.vertices.length === 0) {
       throw new Error('Arena has no solid collision geometry');
@@ -219,10 +229,13 @@ export class BowCollision {
     this.closedTriangles = new Uint8Array(collected.closedTriangles);
     this.solidMeshes = collected.solidMeshes;
     this.triangles = collected.vertices.length / VALUES_PER_TRIANGLE;
+    const barrier = collectMarkedGeometry(arena, PLAYER_BARRIER_MARKER);
+    this.barrierTriangles = barrier.vertices.length / VALUES_PER_TRIANGLE;
+    this.barrierBvh = this.buildBarrierBvh(barrier.vertices);
     this.buildMs = performance.now() - startedAt;
     console.info(
       `[BowCollision] ${this.triangles} triangles / ${this.solidMeshes} solids; ` +
-        `build ${this.buildMs.toFixed(2)} ms`,
+        `${this.barrierTriangles} barrier triangles; build ${this.buildMs.toFixed(2)} ms`,
     );
   }
 
@@ -344,16 +357,19 @@ export class BowCollision {
     let isGrounded = false;
     let maxCorrection = 0;
 
-    this.bvh.shapecast({
-      intersectsBounds: (bounds) => bounds.intersectsBox(this.capsuleBounds),
-      intersectsTriangle: (triangle) => {
+    const contactVisitor = {
+      intersectsBounds: (bounds: Box3) => bounds.intersectsBox(this.capsuleBounds),
+      intersectsTriangle: (triangle: ExtendedTriangle) => {
         const contact = this.resolveTriangleContact(triangle, feet, velocity, radius);
         isGrounded ||= contact.isGrounded;
         maxCorrection = Math.max(maxCorrection, contact.correction);
 
         return false;
       },
-    });
+    };
+    this.bvh.shapecast(contactVisitor);
+    // Barrier walls are vertical, so they can never register as walkable support.
+    this.barrierBvh?.shapecast(contactVisitor);
 
     return { isGrounded, maxCorrection };
   }
@@ -427,9 +443,9 @@ export class BowCollision {
     this.setCapsule(feet, radius);
     let penetrationDepth = 0;
 
-    this.bvh.shapecast({
-      intersectsBounds: (bounds) => bounds.intersectsBox(this.capsuleBounds),
-      intersectsTriangle: (triangle) => {
+    const penetrationVisitor = {
+      intersectsBounds: (bounds: Box3) => bounds.intersectsBox(this.capsuleBounds),
+      intersectsTriangle: (triangle: ExtendedTriangle) => {
         penetrationDepth = Math.max(
           penetrationDepth,
           radius -
@@ -451,7 +467,9 @@ export class BowCollision {
 
         return false;
       },
-    });
+    };
+    this.bvh.shapecast(penetrationVisitor);
+    this.barrierBvh?.shapecast(penetrationVisitor);
 
     return penetrationDepth;
   }
@@ -558,6 +576,7 @@ export class BowCollision {
       buildMs: this.buildMs,
       triangles: this.triangles,
       solidMeshes: this.solidMeshes,
+      barrierTriangles: this.barrierTriangles,
       steps: this.steps,
       meanStepMs: this.steps > 0 ? this.totalMs / this.steps : 0,
       maxStepMs: this.maxMs,
@@ -571,5 +590,24 @@ export class BowCollision {
    */
   dispose(): void {
     this.geometry.dispose();
+    this.barrierGeometry.dispose();
+  }
+
+  // Builds the optional player-only barrier tree; arenas without barriers get no tree at all.
+  private buildBarrierBvh(vertices: number[]): MeshBVH | null {
+    if (vertices.length === 0) {
+      return null;
+    }
+
+    this.barrierGeometry.setAttribute(
+      'position',
+      new Float32BufferAttribute(vertices, POSITION_COMPONENTS),
+    );
+
+    return new MeshBVH(this.barrierGeometry, {
+      strategy: CENTER,
+      maxLeafSize: BVH_MAX_LEAF_TRIANGLES,
+      indirect: true,
+    });
   }
 }

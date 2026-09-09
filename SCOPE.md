@@ -97,6 +97,12 @@ The player cap and score limit are centralized as `BOW_ROOM_CAP` and `BOW_SCORE_
 
 ## Changelog
 
+### 2026-09-09 — boundary barrier and scene export
+
+An invisible boundary barrier now rings the play area at the original 27 m radius. It is 40 m tall with 96 wall segments and carries a player-barrier marker instead of the solid marker. Player and bot capsules cannot cross it. Arrows, bot sight lines, and spawn support ignore it, so no arrow can stick to an invisible surface. It is not rendered and not batched. The climbable outer boulders therefore stay inside the arena and cannot be used to leave it. Collision statistics now report `barrierTriangles` (192 for this arena). The 129 solid meshes and 89,056 solid triangles are unchanged.
+
+`npm run export:scene` writes the seeded arena to `evidence/bow-arena.gltf` as one self-contained glTF 2.0 JSON file: embedded buffers, plain colored materials in place of the procedural canvas textures, and `EXT_mesh_gpu_instancing` for the four instanced meshes. The invisible barrier is not exported. The file is regenerated on demand and is not committed.
+
 ### 2026-09-09 — solid surfaces and parkour (requested gameplay change)
 
 Solid objects now collide as they look. Arrows stick to the visible triangles of rocks, boulders, walls, crates, shelter posts and roof, barricade planks, fallen timber, and tree trunks. The player and solo bots use the same static mesh collider; players can jump onto supported tops, stand there, slide along walls, and fall when walking off an edge. Foliage boughs and branches, grass, and pebbles stay walk-through. The old invisible 27 m movement boundary is gone. The visible floor at y=-0.04 now determines foot height; eye offset, movement/sprint/draw speeds, jump impulse, controls, and shot hit volumes are unchanged.
