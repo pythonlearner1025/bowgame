@@ -4,6 +4,7 @@
 import { EntityComponentPlugin, ThreeViewer } from 'threepipe';
 import { BowGameComponent } from '../scripts/BowGameComponent.script.js';
 import { BowNetSession } from '../scripts/BowNetSession.js';
+import { randomPlayerName, readPlayerName } from '../scripts/BowPlayerName.js';
 import { WebSocketTransport } from '../scripts/BowTransport.js';
 import { BowPerformance } from '../scripts/BowPerformance.js';
 
@@ -15,9 +16,6 @@ declare global {
     __KITE_BOW_TELEMETRY__?: BowPerformance;
   }
 }
-
-const RANDOM_NAME_RANGE = 10_000;
-const RANDOM_NAME_DIGITS = 4;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#bow-canvas');
 
@@ -34,9 +32,7 @@ const isOnline =
   (searchParameters.get('online') === '1' || location.hostname.endsWith('.workers.dev'));
 
 if (isOnline) {
-  const value = new Uint16Array(1);
-  crypto.getRandomValues(value);
-  const name = `Archer-${String(value[0] % RANDOM_NAME_RANGE).padStart(RANDOM_NAME_DIGITS, '0')}`;
+  const name = readPlayerName() ?? randomPlayerName();
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
   const url = `${scheme}://${location.host}/ws?room=main&name=${encodeURIComponent(name)}`;
   window.__KITE_BOW_SESSION__ = new BowNetSession(

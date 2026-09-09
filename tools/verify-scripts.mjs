@@ -15,6 +15,7 @@ const entries = [
   'BowHandPose.js',
   'BowHandRig.js',
   'BowHumanAsset.js',
+  'BowPlayerName.js',
   'BowPerformance.js',
   'BowPhysics.js',
   'BowReferenceClip.js',
