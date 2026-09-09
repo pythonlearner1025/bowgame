@@ -10,7 +10,8 @@
     "compile:scripts": "tsc -p tsconfig.scripts.json && node tools/verify-scripts.mjs",
     "generate:scene": "node tools/generate-scene.mjs && node tools/verify-scene.mjs",
     "verify:assets": "node tools/verify-assets.mjs",
-    "test": "npm run compile:scripts && npm run verify:assets && node --test tests/bow-*.test.mjs",
+    "typecheck:worker": "wrangler types && tsc -p tsconfig.worker.json",
+    "test": "npm run compile:scripts && npm run typecheck:worker && npm run verify:assets && node --test tests/bow-*.test.mjs",
     "build": "npm run compile:scripts && node tools/verify-scene.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "e2e": "npm run build && playwright test --config tests/e2e/playwright.config.mjs"
@@ -25,10 +26,12 @@
     "threepipe": "file:/private/tmp/kite3d/threepipe"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260908.1",
     "@playwright/test": "1.62.1",
     "esbuild": "^0.25.9",
     "typescript": "^5.9.2",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "wrangler": "4.130.0"
   },
   "kite": {
     "scripts": [

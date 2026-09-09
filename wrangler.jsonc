@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bowgame",
+  "main": "./worker/index.ts",
+  "account_id": "53a144fad4e15ca51c32da9b9fe25d4a",
+  "workers_dev": true,
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/ws"],
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": {
+    "bindings": [
+      {"name": "BOW_ROOM", "class_name": "BowRoom"}
+    ]
+  },
+  "migrations": [
+    {"tag": "v1", "new_sqlite_classes": ["BowRoom"]}
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
