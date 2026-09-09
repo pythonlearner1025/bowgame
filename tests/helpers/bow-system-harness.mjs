@@ -162,6 +162,22 @@ export class FakeElement {
 
     return Promise.resolve();
   }
+
+  /**
+   * Supplies an inert two-dimensional canvas context for seeded arena textures.
+   * @returns {object} No-op drawing context with working gradient handles.
+   */
+  getContext() {
+    const context = {
+      createRadialGradient() {
+        return { addColorStop() {} };
+      },
+    };
+
+    return new Proxy(context, {
+      get: (target, property) => target[property] ?? (() => {}),
+    });
+  }
 }
 
 class FakeStorage {

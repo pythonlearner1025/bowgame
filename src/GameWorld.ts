@@ -18,6 +18,7 @@ import {
   type ThreeViewer,
 } from 'threepipe';
 import { BowArrowTrails } from './BowArrowTrail.js';
+import { buildBowArena } from './BowArena.js';
 import { BowCollision } from './BowCollision.js';
 import { batchBowScene } from './BowSceneBatch.js';
 import { shotSpeed } from './BowPhysics.js';
@@ -49,6 +50,46 @@ interface SceneRestoreState {
 export interface GameWorldOptions {
   arenaRoot?: Group;
   ownsArena: boolean;
+}
+
+/** Match settings needed to create the unchanged seeded runtime arena and configuration. */
+export interface GameWorldBuildOptions {
+  botCount: number;
+  scoreLimit: number;
+  difficulty: BowGameConfig['difficulty'];
+}
+
+/** Runtime arena and configuration created together from serialized component settings. */
+export interface BuiltGameWorld {
+  arenaRoot: Group;
+  config: BowGameConfig;
+}
+
+/**
+ * Builds the seeded arena and maps its authored spawns into one runtime configuration.
+ *
+ * @param options - Validated bot count, score limit, and difficulty from the host component.
+ * @returns The owned arena root and matching mutable runtime configuration.
+ */
+export function buildGameWorld(options: GameWorldBuildOptions): BuiltGameWorld {
+  const arena = buildBowArena();
+  arena.group.name = 'K3D_BOW_RUNTIME_ARENA';
+  const config: BowGameConfig = {
+    version: 1,
+    kind: 'bow-deathmatch',
+    botCount: options.botCount,
+    scoreLimit: options.scoreLimit,
+    difficulty: options.difficulty,
+    obstacles: arena.obstacles,
+    botSpawns: arena.botSpawns.map(({ x, y, z }) => ({ x, y, z })),
+    playerSpawn: {
+      x: arena.playerSpawn.x,
+      y: arena.playerSpawn.y,
+      z: arena.playerSpawn.z,
+    },
+  };
+
+  return { arenaRoot: arena.group, config };
 }
 
 /**

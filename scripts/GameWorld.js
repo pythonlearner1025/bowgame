@@ -4,10 +4,36 @@
  */
 import { Color, DirectionalLight, FogExp2, Group, HemisphereLight, Material, Mesh, Object3D, Texture, Triangle, Vector3, } from 'threepipe';
 import { BowArrowTrails } from './BowArrowTrail.js';
+import { buildBowArena } from './BowArena.js';
 import { BowCollision } from './BowCollision.js';
 import { batchBowScene } from './BowSceneBatch.js';
 import { shotSpeed } from './BowPhysics.js';
 import { BOW_ROOM_CAP } from './BowProtocol.js';
+/**
+ * Builds the seeded arena and maps its authored spawns into one runtime configuration.
+ *
+ * @param options - Validated bot count, score limit, and difficulty from the host component.
+ * @returns The owned arena root and matching mutable runtime configuration.
+ */
+export function buildGameWorld(options) {
+    const arena = buildBowArena();
+    arena.group.name = 'K3D_BOW_RUNTIME_ARENA';
+    const config = {
+        version: 1,
+        kind: 'bow-deathmatch',
+        botCount: options.botCount,
+        scoreLimit: options.scoreLimit,
+        difficulty: options.difficulty,
+        obstacles: arena.obstacles,
+        botSpawns: arena.botSpawns.map(({ x, y, z }) => ({ x, y, z })),
+        playerSpawn: {
+            x: arena.playerSpawn.x,
+            y: arena.playerSpawn.y,
+            z: arena.playerSpawn.z,
+        },
+    };
+    return { arenaRoot: arena.group, config };
+}
 /**
  * Removes one runtime group and disposes each unique geometry and material once.
  *

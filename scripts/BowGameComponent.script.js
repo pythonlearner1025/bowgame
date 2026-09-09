@@ -2,8 +2,8 @@
  * Adapts the bow runtime to Threepipe's component lifecycle without implementing gameplay itself.
  */
 import { Object3DComponent, literalStrings, } from 'threepipe';
-import { buildBowArena } from './BowArena.js';
 import { BowGameRuntime } from './BowGameRuntime.js';
+import { buildGameWorld } from './GameWorld.js';
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
 // Solo matches require at least one opponent.
 const MIN_BOT_COUNT = 1;
@@ -57,22 +57,15 @@ export class BowGameComponent extends Object3DComponent {
         }
         // The GLB intentionally stores this empty authored group plus component state.
         // The unchanged seeded arena is runtime-only because its instancing is lossy in GLB.
-        const arena = buildBowArena();
-        arena.group.name = 'K3D_BOW_RUNTIME_ARENA';
-        this.object.add(arena.group);
-        const config = {
-            version: 1,
-            kind: 'bow-deathmatch',
+        const { arenaRoot, config } = buildGameWorld({
             botCount,
             scoreLimit,
             difficulty,
-            obstacles: arena.obstacles,
-            botSpawns: arena.botSpawns.map(({ x, y, z }) => ({ x, y, z })),
-            playerSpawn: { x: arena.playerSpawn.x, y: arena.playerSpawn.y, z: arena.playerSpawn.z },
-        };
+        });
+        this.object.add(arenaRoot);
         const runtime = new BowGameRuntime(this.ctx.viewer, {
             config,
-            arenaRoot: arena.group,
+            arenaRoot,
             isPaused: () => !this.ctx.ecp.running,
             ownsArena: true,
             session: window.__KITE_BOW_SESSION__ ?? null,

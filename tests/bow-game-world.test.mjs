@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadSystem, makeConfig, makeViewer } from './helpers/bow-system-harness.mjs';
 
-const { GameWorld } = await loadSystem('GameWorld');
+const { GameWorld, buildGameWorld } = await loadSystem('GameWorld');
 const { Group } = await import('threepipe');
 
 test('GameWorld restores viewer settings and computes stable slot spawns', async () => {
@@ -25,4 +25,19 @@ test('GameWorld restores viewer settings and computes stable slot spawns', async
   assert.equal(viewer.scene.background, originalBackground);
   assert.equal(decoration.visible, true);
   assert.equal(viewer.dirtyCalls, 1);
+});
+
+test('GameWorld builds the seeded arena and its matching runtime configuration', () => {
+  const { arenaRoot, config } = buildGameWorld({
+    botCount: 3,
+    scoreLimit: 10,
+    difficulty: 'normal',
+  });
+
+  assert.equal(arenaRoot.name, 'K3D_BOW_RUNTIME_ARENA');
+  assert.equal(config.botCount, 3);
+  assert.equal(config.scoreLimit, 10);
+  assert.equal(config.obstacles.length, 56);
+  assert.equal(config.botSpawns.length, 3);
+  assert.ok(arenaRoot.getObjectByName('Arena boundary barrier'));
 });
