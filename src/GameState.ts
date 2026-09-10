@@ -2,7 +2,7 @@
  * Owns mutable bow simulation data without owning input, rendering, networking, or game rules.
  * Positions and distances use meters in a Y-up world, rotations use radians, and time uses seconds.
  */
-import { Group, Quaternion, Vector3, type Object3D } from 'threepipe';
+import { Group, Quaternion, Vector3, type Object3D, type TCameraControlsMode } from 'threepipe';
 import type { ArrowTrailHandle } from './BowArrowTrail.js';
 import type { BowAudio } from './BowAudio.js';
 import type { ArmRig, HumanRig } from './BowVisuals.js';
@@ -140,7 +140,7 @@ export interface CameraRestoreState {
   quaternion: Quaternion;
   target?: Vector3;
   fov?: number;
-  controls?: boolean;
+  controlsMode?: TCameraControlsMode;
 }
 
 /** Scene objects hidden during play and restored during teardown. */

@@ -271,6 +271,7 @@ export async function makeViewer() {
   scene.mainCamera = new PerspectiveCamera(60, 1, 0.1, 200);
   scene.mainCamera.target = new Vector3();
   scene.mainCamera.controls = { enabled: true };
+  scene.mainCamera.controlsMode = 'orbit';
   const canvas = new FakeElement('canvas');
   const container = new FakeElement('main');
 

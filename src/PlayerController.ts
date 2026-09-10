@@ -74,7 +74,7 @@ export class PlayerController {
       quaternion: camera.quaternion.clone(),
       target: camera.target?.clone(),
       fov: perspectiveCamera.fov,
-      controls: camera.controls?.enabled,
+      controlsMode: camera.controlsMode,
     };
     window.addEventListener('keydown', this.onKeyDown, true);
     window.addEventListener('keyup', this.onKeyUp, true);
@@ -85,9 +85,10 @@ export class PlayerController {
     document.addEventListener('pointerlockchange', this.onLock);
     this.viewer.canvas.addEventListener('contextmenu', this.onContext);
 
-    if (camera.controls) {
-      camera.controls.enabled = false;
-    }
+    // The viewer calls controls.update() every postFrame, and that call rotates the camera with
+    // lookAt(controls.target). It ignores controls.enabled, so only an empty controlsMode stops it.
+    // Leaving it on gives the camera a second writer that wins on any frame the runtime skips.
+    camera.controlsMode = '';
 
     perspectiveCamera.fov = 76;
     perspectiveCamera.updateProjectionMatrix?.();
@@ -132,8 +133,8 @@ export class PlayerController {
       camera.target?.copy(restore.target);
     }
 
-    if (camera.controls && restore.controls !== undefined) {
-      camera.controls.enabled = restore.controls;
+    if (restore.controlsMode !== undefined) {
+      camera.controlsMode = restore.controlsMode;
     }
 
     perspectiveCamera.fov = restore.fov;
@@ -378,10 +379,6 @@ export class PlayerController {
       this.updateCharacterPreview();
 
       return;
-    }
-
-    if (camera.controls) {
-      camera.controls.enabled = false;
     }
 
     const isWalking = this.state.keys.size > 0 && this.state.hp > 0 && this.state.active;
