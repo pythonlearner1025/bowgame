@@ -1,7 +1,7 @@
 /**
  * Boots the standalone bow player and selects solo or online transport from the current URL.
  */
-import { EntityComponentPlugin, ThreeViewer } from 'threepipe';
+import { EntityComponentPlugin, GLStatsJS, ThreeViewer } from 'threepipe';
 import { BowGameComponent } from '../scripts/BowGameComponent.script.js';
 import { BowNetSession } from '../scripts/BowNetSession.js';
 import { randomPlayerName, readPlayerName } from '../scripts/BowPlayerName.js';
@@ -44,11 +44,33 @@ if (isOnline) {
 
 document.documentElement.dataset.playerMode = isOnline ? 'online' : 'solo';
 
+/**
+ * Shows threepipe's stats.js panel in the top-left corner.
+ *
+ * The viewer's animation loop already calls `renderStats.begin()` and `end()` once per loop, so
+ * assigning the panel reuses that timing without `debug: true`, which also rethrows plugin errors.
+ *
+ * @param viewer - Viewer whose animation loop drives the panel.
+ */
+function showFrameStats(viewer: ThreeViewer): void {
+  const stats = new GLStatsJS(viewer.container);
+  viewer.renderStats = stats;
+  stats.show();
+  const panel = viewer.container.querySelector<HTMLElement>('#stats-js');
+
+  if (panel) {
+    // GLStatsJS pins the panel top-right, where the HUD standings sit.
+    Object.assign(panel.style, { left: '0', right: 'auto', top: '0', zIndex: '20001' });
+  }
+}
+
 async function start(): Promise<void> {
   const ecp = new EntityComponentPlugin(false);
   ecp.addComponentType(BowGameComponent);
-  const viewer = new ThreeViewer({ canvas, msaa: true, plugins: [ecp] });
+  // The 4-sample MSAA target was the largest per-frame GPU cost, so the player renders without it.
+  const viewer = new ThreeViewer({ canvas, msaa: false, plugins: [ecp] });
   window.viewer = viewer;
+  showFrameStats(viewer);
   await viewer.load('/kite/assets/main.scene.glb', { autoCenter: false, autoScale: false });
   ecp.start();
   viewer.timeline.start();

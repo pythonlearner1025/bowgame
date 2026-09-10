@@ -40,7 +40,7 @@ Open the printed local URL. Click **ENTER ARENA** to enable interaction and audi
 
 ## Diagnose flicker or lag
 
-Client diagnostics are always collected locally in a bounded, roughly five-minute ring buffer; no gameplay payloads are stored. Press **F8** to show or hide the compact debug overlay. Press **F9** to download the buffer as `bowgame-telemetry-<timestamp>.json`. Browser automation can read the same data with `window.__KITE_BOW_TELEMETRY__.exportData()`.
+Client diagnostics are always collected locally in a bounded, roughly five-minute ring buffer; no gameplay payloads are stored. Press **F8** to show or hide the compact debug overlay. Press **F9** to download the buffer as `bowgame-telemetry-<timestamp>.json`. Browser automation can read the same data with `window.__KITE_BOW_TELEMETRY__.exportData()`. A threepipe stats.js panel (`GLStatsJS`) shows frames per second in the top-left corner. Click it to switch between FPS, milliseconds per viewer loop, and memory (Chrome only).
 
 Each `samples[]` entry covers about one second and contains:
 

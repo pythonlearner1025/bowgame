@@ -311,3 +311,51 @@ test('A saved username is reused without extension and can be cleared.', async (
   await expect.poll(() => joins.at(-1)).toMatch(/^Archer-\d{4}$/);
   expect(await page.evaluate(() => localStorage.getItem('bowgame.player-name.v1'))).toBeNull();
 });
+
+test('The stats.js panel sits top-left above the HUD and the viewer loop redraws it', async ({
+  page,
+}) => {
+  await page.goto('/?solo=1');
+  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  const panel = page.locator('#stats-js');
+  await expect(panel).toBeVisible();
+  // The HUD mounts when the runtime starts, which can finish after playerReady.
+  await expect(page.locator('#kite3d-bow-game-hud')).toBeAttached();
+
+  const box = await panel.boundingBox();
+  expect(Math.round(box.x)).toBe(0);
+  expect(Math.round(box.y)).toBe(0);
+
+  const stacking = await page.evaluate(() => {
+    const stats = document.querySelector('#stats-js');
+    const hud = document.querySelector('#kite3d-bow-game-hud');
+
+    const statsBox = stats.getBoundingClientRect();
+    const centerX = statsBox.left + statsBox.width / 2;
+    const centerY = statsBox.top + statsBox.height / 2;
+
+    return {
+      statsZ: Number(getComputedStyle(stats).zIndex),
+      hudZ: Number(getComputedStyle(hud).zIndex),
+      sameParent: stats.parentElement === hud.parentElement,
+      hitsPanel: Boolean(document.elementFromPoint(centerX, centerY)?.closest('#stats-js')),
+    };
+  });
+  expect(stacking.sameParent).toBe(true);
+  expect(stacking.statsZ).toBeGreaterThan(stacking.hudZ);
+  expect(stacking.hitsPanel).toBe(true);
+
+  // The stats.js FPS graph repaints once per second, and only when the viewer loop calls end().
+  const readGraph = () =>
+    page.evaluate(() => document.querySelector('#stats-js canvas').toDataURL());
+  const firstGraph = await readGraph();
+  await expect.poll(readGraph, { timeout: 5000 }).not.toBe(firstGraph);
+});
+
+test('The hosted player creates its viewer with MSAA off', async ({ page }) => {
+  await page.goto('/?solo=1');
+  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+
+  // ExtendedRenderPass reads this flag each frame to choose the 4-sample target.
+  expect(await page.evaluate(() => window.viewer.renderManager.msaa)).toBe(false);
+});
