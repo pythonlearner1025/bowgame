@@ -4,7 +4,8 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: 'bow-online.spec.mjs',
-  timeout: 180_000,
+  // Two full release arenas can take over 165 seconds to initialize under software WebGL.
+  timeout: 300_000,
   fullyParallel: false,
   workers: 1,
   reporter: 'line',

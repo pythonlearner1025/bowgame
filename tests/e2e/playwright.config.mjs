@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: 'npm run preview -- --port 43173',
+    command: 'npm run build && node tools/serve-kite3d-test-release.mjs',
     cwd: new URL('../..', import.meta.url).pathname,
     url: 'http://127.0.0.1:43173',
     reuseExistingServer: false,

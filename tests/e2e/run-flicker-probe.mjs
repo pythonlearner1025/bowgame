@@ -2,30 +2,56 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
-const root = resolve(new URL('../..', import.meta.url).pathname);
-const label = process.env.BOWGAME_FLICKER_LABEL ?? 'local';
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const label = process.env.BOWGAME_FLICKER_LABEL ?? 'after';
 const evidenceDir = resolve(root, 'evidence');
-let worker = null,
-  browser = null,
-  baseURL = process.env.BOWGAME_BASE_URL;
+let releaseServer = null;
+let worker = null;
+let browser = null;
+let baseURL = process.env.BOWGAME_BASE_URL;
+let webSocketEndpoint = process.env.BOWGAME_WS_URL;
 
 async function freePort() {
   const server = createServer();
-  await new Promise((ok, fail) => {
-    server.once('error', fail);
-    server.listen(0, '127.0.0.1', ok);
+  await new Promise((resolvePromise, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolvePromise);
   });
-  const address = server.address(),
-    port = typeof address === 'object' && address ? address.port : 0;
-  await new Promise((ok) => server.close(ok));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise((resolvePromise) => server.close(resolvePromise));
 
   return port;
 }
 
-async function waitForWorker(url, child) {
+async function waitForRelease(url, child) {
+  const deadline = Date.now() + 10_000;
+
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(`release server exited with ${child.exitCode}`);
+    }
+
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // The release server has not bound its socket yet.
+    }
+
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
+
+  throw new Error('release server did not become ready');
+}
+
+async function waitForWorker(url, origin, child) {
   const deadline = Date.now() + 25_000;
 
   while (Date.now() < deadline) {
@@ -34,28 +60,28 @@ async function waitForWorker(url, child) {
     }
 
     try {
-      const response = await fetch(url);
-      if (response.ok) {
+      const response = await fetch(url, { headers: { Origin: origin } });
+      if (response.status === 426) {
         return;
       }
-    } catch (error) {
-      console.warn('Flicker probe is still waiting for the local Worker.', error);
+    } catch {
+      // Wrangler has not bound its socket yet.
     }
 
-    await new Promise((ok) => setTimeout(ok, 200));
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
   }
 
   throw new Error('wrangler dev did not become ready');
 }
 
-async function stopWorker(child) {
+async function stopProcess(child) {
   if (!child || child.exitCode !== null) {
     return;
   }
   child.kill('SIGTERM');
   await Promise.race([
-    new Promise((ok) => child.once('exit', ok)),
-    new Promise((ok) => setTimeout(ok, 3000)),
+    new Promise((resolvePromise) => child.once('exit', resolvePromise)),
+    new Promise((resolvePromise) => setTimeout(resolvePromise, 3000)),
   ]);
   if (child.exitCode === null) {
     child.kill('SIGKILL');
@@ -103,7 +129,7 @@ async function enter(page, path, name) {
   });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(path);
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true', {
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true, {
     timeout: 30_000,
   });
   if (path.includes('online=1')) {
@@ -112,14 +138,14 @@ async function enter(page, path, name) {
       { timeout: 30_000 },
     );
   }
-  await page.evaluate((value) => {
-    const canvas = document.querySelector('#bow-canvas');
-    canvas.requestPointerLock = () => Promise.reject(new Error('probe disables pointer lock'));
-    if (value && window.__KITE_BOW_SESSION__) {
-      window.__KITE_BOW_SESSION__.setName(value);
-    }
-    window.__KITE_BOW_GAME__.runtime.enter();
-  }, name);
+  await page.evaluate(() => {
+    const canvas = document.querySelector('#kite3d-canvas');
+    canvas.requestPointerLock = () => Promise.resolve();
+  });
+  if (name) {
+    await page.getByRole('textbox', { name: 'Archer name' }).fill(name);
+  }
+  await page.getByRole('button', { name: 'ENTER ARENA' }).click();
   await page.waitForTimeout(1000);
 
   return errors;
@@ -391,17 +417,31 @@ try {
   const workerOutput = [];
 
   if (!baseURL) {
-    const port = await freePort();
-    baseURL = `http://127.0.0.1:${port}`;
+    const releasePort = await freePort();
+    baseURL = `http://127.0.0.1:${releasePort}`;
+    releaseServer = spawn(process.execPath, ['tools/serve-kite3d-test-release.mjs'], {
+      cwd: root,
+      stdio: ['ignore', 'inherit', 'inherit'],
+      env: { ...process.env, BOW_RELEASE_PORT: String(releasePort) },
+    });
+    await waitForRelease(baseURL, releaseServer);
+  }
+
+  if (!webSocketEndpoint) {
+    const workerPort = await freePort();
+    webSocketEndpoint = `ws://127.0.0.1:${workerPort}/ws`;
     worker = spawn(
       resolve(root, 'node_modules/.bin/wrangler'),
-      ['dev', '--local', '--port', String(port), '--log-level', 'warn'],
+      ['dev', '--local', '--port', String(workerPort), '--log-level', 'warn'],
       { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     worker.stdout.on('data', (chunk) => workerOutput.push(String(chunk)));
     worker.stderr.on('data', (chunk) => workerOutput.push(String(chunk)));
-    await waitForWorker(baseURL, worker);
+    await waitForWorker(webSocketEndpoint.replace(/^ws/, 'http'), new URL(baseURL).origin, worker);
   }
+
+  const onlinePageUrl = new URL('/?online=1', baseURL);
+  onlinePageUrl.searchParams.set('ws', webSocketEndpoint);
 
   const launched = await launchBrowser();
   browser = launched.instance;
@@ -413,13 +453,13 @@ try {
   results.push(await capture(solo, 'solo-one-client'));
   await solo.close();
   const onlineOne = await context.newPage();
-  errors.push(...(await enter(onlineOne, `${baseURL}/?online=1`, 'Probe-One')));
+  errors.push(...(await enter(onlineOne, onlinePageUrl.href, 'Probe-One')));
   results.push(await capture(onlineOne, 'online-one-client'));
   await onlineOne.close();
   const pageA = await context.newPage(),
     pageB = await context.newPage();
-  errors.push(...(await enter(pageA, `${baseURL}/?online=1`, 'Probe-A')));
-  errors.push(...(await enter(pageB, `${baseURL}/?online=1`, 'Probe-B')));
+  errors.push(...(await enter(pageA, onlinePageUrl.href, 'Probe-A')));
+  errors.push(...(await enter(pageB, onlinePageUrl.href, 'Probe-B')));
   await Promise.all([
     pageA.waitForFunction(() => window.__KITE_BOW_GAME__.getState().remotePlayers.length === 1),
     pageB.waitForFunction(() => window.__KITE_BOW_GAME__.getState().remotePlayers.length === 1),
@@ -432,6 +472,7 @@ try {
   const report = {
     label,
     baseURL,
+    webSocketEndpoint,
     backendAttempt: launched.backendAttempt,
     launchArgs: launched.launchArgs,
     launchFailures: launched.failures,
@@ -471,5 +512,6 @@ try {
   }
 } finally {
   await browser?.close();
-  await stopWorker(worker);
+  await stopProcess(worker);
+  await stopProcess(releaseServer);
 }

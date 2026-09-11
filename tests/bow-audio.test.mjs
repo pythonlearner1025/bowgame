@@ -27,6 +27,10 @@ const {
 } = await import(pathToFileURL(join(temporary, 'audio.mjs')));
 const sounds = ['draw', 'body', 'head', 'cover'];
 
+function recordedAssetPath(url) {
+  return join('assets/bow-audio', new URL(url).pathname.split('/').at(-1));
+}
+
 function rms(samples) {
   return Math.sqrt(samples.reduce((sample, value) => sample + value * value, 0) / samples.length);
 }
@@ -51,7 +55,7 @@ test('served recordings retain quiet PCM levels, faded edges and documented prov
   const provenance = JSON.parse(await readFile('assets/bow-audio/PROVENANCE.json', 'utf8'));
 
   for (const kind of ['release', 'whizz']) {
-    const bytes = await readFile(BOW_RECORDED_AUDIO[kind].replace('/kite/', '')),
+    const bytes = await readFile(recordedAssetPath(BOW_RECORDED_AUDIO[kind])),
       view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let start = 0,
       length = 0;
@@ -151,7 +155,7 @@ const deferred = [];
 
 globalThis.fetch = async (path) => {
   fetches++;
-  const bytes = await readFile(path.replace('/kite/', ''));
+  const bytes = await readFile(recordedAssetPath(path));
 
   return {
     ok: true,

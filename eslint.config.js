@@ -64,11 +64,12 @@ export default typescriptEslint.config(
   {
     ignores: [
       'assets/**',
-      'dist/**',
+      '.kite3d/**',
       'evidence/**',
       'node_modules/**',
       'scripts/**',
       'test-results/**',
+      'vendor/**',
       'worker-configuration.d.ts',
     ],
   },

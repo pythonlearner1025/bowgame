@@ -21,10 +21,7 @@ const result = await build({
       name: 'three',
       setup(secondValue) {
         secondValue.onResolve({ filter: /^threepipe$/ }, () => ({
-          path: new URL(
-            '../node_modules/threepipe/node_modules/three/build/three.module.js',
-            import.meta.url,
-          ).pathname,
+          path: new URL('../node_modules/three/build/three.module.js', import.meta.url).pathname,
         }));
       },
     },

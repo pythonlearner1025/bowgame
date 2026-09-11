@@ -25,6 +25,7 @@ import {
   Quaternion,
 } from 'threepipe';
 import { handOrientation, poseHandFingers, type HandSide } from './BowHandPose.js';
+import { bowAssetUrl } from './BowAssetUrl.js';
 import type { HumanRig } from './BowVisuals.js';
 /** One bone from the serialized bundled skeleton. */
 export interface AssetBone {
@@ -56,7 +57,9 @@ let asset: HumanAsset | undefined;
 let skinTexture: Texture | undefined;
 let eyeTexture: Texture | undefined;
 let pending: Promise<void> | undefined;
-const base = '/kite/assets/bow-survivor/';
+const HUMAN_ASSET_URL = bowAssetUrl('bow-survivor/male-adult-rigged.json');
+const SKIN_TEXTURE_URL = bowAssetUrl('bow-survivor/skin-male.png');
+const EYE_TEXTURE_URL = bowAssetUrl('bow-survivor/eyes-brown.png');
 
 /**
  * Reads the currently cached anatomy and skin texture for first-person arm construction.
@@ -77,15 +80,15 @@ export function getHumanArmSource(): {
  */
 export function preloadHumanAsset(): Promise<void> {
   return (pending ??= Promise.all([
-    fetch(base + 'male-adult-rigged.json').then((response) => {
+    fetch(HUMAN_ASSET_URL).then((response) => {
       if (!response.ok) {
         throw new Error('Adult model unavailable');
       }
 
       return response.json() as Promise<HumanAsset>;
     }),
-    new TextureLoader().loadAsync(base + 'skin-male.png'),
-    new TextureLoader().loadAsync(base + 'eyes-brown.png'),
+    new TextureLoader().loadAsync(SKIN_TEXTURE_URL),
+    new TextureLoader().loadAsync(EYE_TEXTURE_URL),
   ]).then(([data, map, eyes]) => {
     asset = data;
     skinTexture = map;

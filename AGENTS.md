@@ -9,17 +9,33 @@ lambdas beyond `(a, b) => a - b` sorts; unexplained regular expressions or bit f
 abbreviations; unrelated declarations in one `const`; and long positional parameter lists of
 numbers.
 
+# Project workflow and boundaries
+
+- Kite3D 0.13.2 is the only page runtime. Use `npm run dev`, `npm run check`, and the generated
+  release fixture from `npm run build`; do not restore a Vite/player boot path.
+- TypeScript under `src/` is authoritative and `scripts/*.js` is committed generated output. Run
+  `npm run compile:scripts`, never edit generated scripts directly, and use `npm test` for the
+  non-browser gate.
+- `npm run publish` and `npm run deploy:worker` are separate outward release actions. Never run
+  either without explicit user authorization; publishing Kite does not deploy the Worker.
+- Attach all play-only scene content below one root tracked by `RuntimeObjectOwner`, outside
+  `modelRoot`. Dispose runtime services before owner cleanup and restore the stopped preview.
+- Raw browser requests use `bowAssetUrl()`. `/kite3d/` belongs only to Kite's configured loader.
+
 # Notes for Kite and threepipe Game Development
 
 - The game is using kite game engine built on top of threepipe and three.js.
-- Scenes in the game are designed in a UI editor(similar to Unity/Godot) and exported as .scene.glb files. These are binary files and cannot be read or edited as text
+- Scenes are designed in a UI editor similar to Unity or Godot. This project stores its authored
+  scene as deterministic `assets/main.scene.gltf` plus `assets/main.scene.bin`; regenerate it with
+  `npm run generate:scene` instead of hand-editing either file.
 - The game dependencies, packages, scripts etc are defined in the package.json file in the game project. Any script or dependency required in the scene or the editor must be added to package.json. Call MCP tool `refreshPackageJson` to update the editor after modifying package.json.
 - The game consists of objects in the scene like player, trees, enemies, weapons, etc. Each object is a three.js `Object3D` with `Object3DComponents` that extend the functionality of the objects
 - Custom components are used to add game-specific behavior to objects. For example, the `PlayerComponent` handles player movement and actions, while the `EnemyComponent` manages enemy AI. These components are defined in their dedicated .script.js files in the game folder and can be attached to the objects using the UI.
 - Instruct the user to make changes to the 3D scene or to add or remove components from the game.
 - Check node_modules/threepipe for the source code of threepipe and its plugins like `ThreeViewer`, `EntityComponentPlugin` etc.
 - threepipe is based on three.js, any three.js export can be imported like `import * as THREE from 'three';`, for three.js addons, they need to be imported from threepipe like `import { SimplifyModifier } from 'threepipe';`(but its not required in most cases as the functionality is built into some plugin).
-- The game includes a main.js file that is not used during development, so it not to be modified.
+- `main.js` is Kite3D's post-start hook. It installs platform validation, telemetry, diagnostics,
+  and cleanup after `BowGameComponent` is ready. Keep it minimal and lifecycle-safe.
 - Do not use inheritance when creating custom components, always extend from `Object3DComponent` directly. For reusable code, use composition by creating helper classes or functions that can be used across multiple components.
 - The game uses ES6 modules, so use `import` and `export` statements for modularity.
 - When editing files with the editor open, the changes are hot-reloaded automatically on file save. It is necessary to ensure that all resources and event listeners are properly cleaned up in the `destroy()`(or `stop()`) method of components to prevent memory leaks during hot-reloading.
@@ -196,7 +212,8 @@ Access the threepipe viewer inside a component using `this.ctx.viewer`.
 - Preload assets before game starts using the AssetManagerPlugin
 - Use relative paths from the game folder for assets
 - Destroy loaded assets in `stop()` or `destroy()`.
-- Models in the projects `assets` folder can be loaded with the base path `/kite/assets/`. E.g. `/kite/assets/enemy.glb`
+- Runtime fetches and texture loads use `bowAssetUrl()` so their module-relative URLs work
+  in both Kite development and published releases. `/kite3d/` is reserved for Kite's loader.
 
 ## Timers & Delays
 

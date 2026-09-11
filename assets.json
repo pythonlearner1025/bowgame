@@ -1,11 +1,6 @@
 {
   "version": 1,
   "files": {
-    "main.scene.glb": {
-      "path": "assets/main.scene.glb",
-      "sha256": "27ba1ef3cdc2ea6b3d6c8d1101682b9d4df1311fc0708f0210ad7d80897d0ec1",
-      "mime": "model/gltf-binary"
-    },
     "bow-audio/LICENSES.md": {
       "path": "assets/bow-audio/LICENSES.md",
       "sha256": "29136a39d03d3ca48a8cb578e3e86926b3706ebe11217edcce4725ca74dd5df5",
@@ -60,6 +55,16 @@
       "path": "assets/bow-survivor/skin-male.png",
       "sha256": "03efe1f6b0ae52429649dcefc9dcaef6058032f874a251169cc3e2ed473c3874",
       "mime": "image/png"
+    },
+    "main.scene.gltf": {
+      "path": "assets/main.scene.gltf",
+      "sha256": "dd82aed00fe323fa7fc6be3dd84bc6e4bfa90b72e12b3613c5d8a2ce4db4d8d7",
+      "mime": "model/gltf+json"
+    },
+    "main.scene.bin": {
+      "path": "assets/main.scene.bin",
+      "sha256": "74b17a3dbd33c3f8b8cf5b02043c8407c8f6c0077d8b9aba12a3e2774fa88d8d",
+      "mime": "application/octet-stream"
     }
   }
 }

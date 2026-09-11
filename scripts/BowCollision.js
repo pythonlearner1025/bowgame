@@ -3,7 +3,7 @@
  * It does not move scene objects, integrate gravity, or rebuild for dynamic geometry.
  */
 import { Box3, BufferGeometry, DoubleSide, Float32BufferAttribute, Line3, Matrix4, Ray, Vector3, } from 'three';
-import { CENTER, MeshBVH } from 'three-mesh-bvh';
+import { CENTER, MeshBVH, } from '../vendor/three-mesh-bvh-0.9.5/index.module.js';
 // The local player uses a 38-centimeter upright collision radius.
 export const PLAYER_RADIUS = 0.38;
 // Player and bot collision capsules are 1.8 meters tall from feet to head.

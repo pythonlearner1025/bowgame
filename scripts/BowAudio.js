@@ -4,6 +4,7 @@
  */
 /* eslint-disable no-magic-numbers -- The renderer is a calibrated synthesis patch. */
 /* eslint-disable no-bitwise -- The seeded xorshift generator requires exact bit operations. */
+import { bowAssetUrl } from './BowAssetUrl.js';
 /** Maximum simultaneous voices; bounding the graph avoids audio-thread spikes. */
 export const BOW_AUDIO_VOICES = 16;
 /** Calibrated gain and smoothing values shared by recorded and procedural layers. */
@@ -19,8 +20,8 @@ export const BOW_AUDIO_MIX = {
 };
 /** Stable public paths for the two recorded foley layers. */
 export const BOW_RECORDED_AUDIO = {
-    release: '/kite/assets/bow-audio/release-recorded.wav',
-    whizz: '/kite/assets/bow-audio/whizz-recorded.wav',
+    release: bowAssetUrl('bow-audio/release-recorded.wav'),
+    whizz: bowAssetUrl('bow-audio/whizz-recorded.wav'),
 };
 /** Per-recording gain corrections measured against the procedural layers. */
 export const BOW_RECORDED_MIX = { release: 0.8, whizz: 0.9 };

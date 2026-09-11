@@ -12,6 +12,46 @@ const bundled = await build({
 });
 const source = `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`;
 const { RoomLogic, ROOM_CAP, SCORE_LIMIT } = await import(source);
+const HTTP_OK = 200;
+const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
+const HTTP_UPGRADE_REQUIRED = 426;
+
+const originBundle = await build({
+  entryPoints: ['worker/origin.ts'],
+  bundle: true,
+  write: false,
+  format: 'esm',
+  platform: 'node',
+});
+const originSource = `data:text/javascript;base64,${Buffer.from(originBundle.outputFiles[0].text).toString('base64')}`;
+const { isAllowedBowOrigin, parseBowOrigin } = await import(originSource);
+
+const workerBundle = await build({
+  entryPoints: ['worker/index.ts'],
+  bundle: true,
+  write: false,
+  format: 'esm',
+  platform: 'node',
+  plugins: [
+    {
+      name: 'cloudflare-worker-class',
+      setup(buildContext) {
+        buildContext.onResolve({ filter: /^cloudflare:workers$/ }, () => ({
+          path: 'cloudflare-workers',
+          namespace: 'stub',
+        }));
+        buildContext.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
+          contents:
+            'export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }',
+          loader: 'js',
+        }));
+      },
+    },
+  ],
+});
+const workerSource = `data:text/javascript;base64,${Buffer.from(workerBundle.outputFiles[0].text).toString('base64')}`;
+const { handleBowRequest } = await import(workerSource);
 
 test('room caps membership at ten and reuses a departed player slot', () => {
   const room = new RoomLogic();
@@ -75,4 +115,75 @@ test('leave removes a player and their score', () => {
   assert.equal(room.leave('a'), true);
   assert.deepEqual(room.scores(), { b: 0 });
   assert.equal(room.leave('a'), false);
+});
+
+test('Origin policy accepts published tenants and loopback development ports', () => {
+  const allowed = [
+    'https://bow.app.blitz.dev',
+    'https://nested.bow.app.blitz.dev',
+    'https://bow.app.blitz.dev:443',
+    'http://localhost:43173',
+    'https://127.0.0.1:8443',
+    'http://[::1]:54847',
+  ];
+
+  for (const origin of allowed) {
+    assert.equal(isAllowedBowOrigin(origin), true, origin);
+  }
+});
+
+test('Origin policy rejects missing, malformed, bare, lookalike, and non-HTTPS tenants', () => {
+  const rejected = [
+    null,
+    'null',
+    'not a url',
+    'ftp://bow.app.blitz.dev',
+    'https://app.blitz.dev',
+    'https://bow..app.blitz.dev',
+    'https://app.blitz.dev.evil.example',
+    'http://bow.app.blitz.dev',
+    'https://bow.app.blitz.dev:444',
+    'https://example.com',
+  ];
+
+  for (const origin of rejected) {
+    assert.equal(isAllowedBowOrigin(origin), false, String(origin));
+  }
+  assert.equal(parseBowOrigin('https://bow.app.blitz.dev/path'), null);
+});
+
+test('Worker checks path, Origin, and Upgrade before looking up a room', async () => {
+  const calls = [];
+  const env = {
+    BOW_ROOM: {
+      getByName(name) {
+        calls.push(name);
+
+        return { fetch: async () => new Response('room') };
+      },
+    },
+  };
+  const missingPath = await handleBowRequest(new Request('https://worker.example/'), env);
+  const hostile = await handleBowRequest(
+    new Request('https://worker.example/ws', { headers: { Origin: 'https://evil.example' } }),
+    env,
+  );
+  const plainHttp = await handleBowRequest(
+    new Request('https://worker.example/ws', {
+      headers: { Origin: 'http://127.0.0.1:43173' },
+    }),
+    env,
+  );
+  const upgraded = await handleBowRequest(
+    new Request('https://worker.example/ws?room=six', {
+      headers: { Origin: 'http://127.0.0.1:43173', Upgrade: 'websocket' },
+    }),
+    env,
+  );
+
+  assert.equal(missingPath.status, HTTP_NOT_FOUND);
+  assert.equal(hostile.status, HTTP_FORBIDDEN);
+  assert.equal(plainHttp.status, HTTP_UPGRADE_REQUIRED);
+  assert.equal(upgraded.status, HTTP_OK);
+  assert.deepEqual(calls, ['six']);
 });

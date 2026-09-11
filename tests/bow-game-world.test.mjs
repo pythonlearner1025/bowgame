@@ -5,19 +5,25 @@ import { loadSystem, makeConfig, makeViewer } from './helpers/bow-system-harness
 
 const { GameWorld, buildGameWorld } = await loadSystem('GameWorld');
 const { Group } = await import('threepipe');
+const SOFTWARE_RENDER_SCALE = 0.5;
 
 test('GameWorld restores viewer settings and computes stable slot spawns', async () => {
   const viewer = await makeViewer();
   const decoration = new Group();
   viewer.scene.modelRoot.add(decoration);
   const originalBackground = viewer.scene.background;
-  const world = new GameWorld(viewer, { ownsArena: false });
+  const world = new GameWorld(viewer, {
+    ownsArena: false,
+    authoredPreviewRoot: decoration,
+  });
   const config = makeConfig();
 
   world.start(config);
   const ringSpawn = world.getSlotSpawn(config, 4);
+  const sun = world.root.children.find((object) => object.isDirectionalLight);
 
   assert.equal(viewer.renderManager.renderScale, 1.1);
+  assert.equal(sun.castShadow, true);
   assert.equal(decoration.visible, false);
   assert.deepEqual(ringSpawn.toArray(), [19, 0, -18]);
   world.stop();
@@ -41,3 +47,26 @@ test('GameWorld builds the seeded arena and its matching runtime configuration',
   assert.equal(config.botSpawns.length, 3);
   assert.ok(arenaRoot.getObjectByName('Arena boundary barrier'));
 });
+
+const SOFTWARE_RENDERER_CASES = [
+  'ANGLE SwiftShader driver',
+  'Mesa llvmpipe (LLVM 19.1.7, 256 bits)',
+  'Mesa softpipe',
+  'Mesa lavapipe',
+  'Generic software renderer',
+];
+
+for (const rendererName of SOFTWARE_RENDERER_CASES) {
+  test(`GameWorld recognizes ${rendererName} as software rendering`, async () => {
+    const viewer = await makeViewer({ rendererName });
+    const world = new GameWorld(viewer, { ownsArena: false });
+
+    world.start(makeConfig());
+    const sun = world.root.children.find((object) => object.isDirectionalLight);
+
+    assert.equal(viewer.renderManager.renderScale, SOFTWARE_RENDER_SCALE);
+    assert.equal(sun.castShadow, false);
+    world.stop();
+    assert.equal(viewer.renderManager.renderScale, 2);
+  });
+}

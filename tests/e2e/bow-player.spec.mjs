@@ -5,30 +5,84 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const EXPECTED_IMPORT_COUNT = 5;
+const SOFTWARE_RENDER_SCALE = 0.5;
+const HTTP_OK = 200;
+const HTTP_NOT_FOUND = 404;
+const EXPECTED_SOLO_BOT_COUNT = 3;
 
-test('hosted player enters the real arena and advances bot combat', async ({ page }) => {
+test('hosted player enters the real arena and advances bot combat', async ({ page, request }) => {
   const consoleErrors = [];
   const pageErrors = [];
+  const webSockets = [];
+  const failedResponses = [];
+  const externalRequests = [];
   page.on('console', (message) => {
     if (message.type() === 'error') {
       consoleErrors.push(message.text());
     }
   });
   page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('websocket', (socket) => webSockets.push(socket.url()));
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+
+    if (['http:', 'https:'].includes(url.protocol) && url.origin !== 'http://127.0.0.1:43173') {
+      externalRequests.push(request.url());
+    }
+  });
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      failedResponses.push({ status: response.status(), url: response.url() });
+    }
+  });
 
   await page.goto('/?collisionTest=1');
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true);
+  const releaseShell = await page.evaluate(async () => {
+    const importMap = JSON.parse(document.querySelector('script[type="importmap"]').textContent);
+    const packageManifest = await fetch('/package.json').then((response) => response.json());
+
+    return {
+      canvasId: window.viewer.canvas.id,
+      importValues: Object.values(importMap.imports),
+      packageManifest,
+      loadingPresent: Boolean(document.querySelector('#kite3d-bow-loading')),
+      runtimeMeta: document.querySelector('meta[name="kite3d-runtime"]')?.content,
+      componentValidation: window.__KITE_BOW_GAME__.validateForKite(),
+      platformValidation: await window.kite3dGame.validate(),
+      renderScale: window.viewer.renderManager.renderScale,
+    };
+  });
+  const missing = await request.get('/not-a-release-file');
+  const head = await request.head('/index.html');
+  expect(releaseShell.canvasId).toBe('kite3d-canvas');
+  expect(releaseShell.runtimeMeta).toMatch(/^0\.13\.2 [a-f0-9]{64}$/);
+  expect(releaseShell.importValues).toEqual(
+    Array(EXPECTED_IMPORT_COUNT).fill('./_blitz/runtime.js'),
+  );
+  expect(releaseShell.packageManifest.devDependencies).toBeUndefined();
+  expect(releaseShell.loadingPresent).toBe(false);
+  expect(releaseShell.componentValidation.status).toBe('pass');
+  expect(releaseShell.platformValidation.status).toBe('pass');
+  expect(releaseShell.renderScale).toBe(SOFTWARE_RENDER_SCALE);
+  expect(missing.status()).toBe(HTTP_NOT_FOUND);
+  expect(missing.headers()['x-content-type-options']).toBe('nosniff');
+  expect(head.status()).toBe(HTTP_OK);
+  expect(await head.body()).toHaveLength(0);
+  expect(webSockets).toEqual([]);
+  expect(externalRequests).toEqual([]);
   const enter = page.getByRole('button', { name: 'ENTER ARENA' });
   await expect(enter).toBeVisible();
   await expect(page.locator('#kite3d-bow-game-hud')).toContainText('00 / 10  ELIMINATIONS');
   const before = await page.evaluate(() => window.__KITE_BOW_GAME__?.getState());
-  expect(before?.bots).toHaveLength(3);
+  expect(before?.bots).toHaveLength(EXPECTED_SOLO_BOT_COUNT);
 
   await page.getByRole('textbox', { name: 'Archer name' }).fill('Rust Hunter');
   await enter.click();
   expect(await page.evaluate(() => window.__KITE_BOW_GAME__.getState().name)).toBe('Rust Hunter');
   const enteredPosition = await page.evaluate(() => {
-    const game = window.__KITE_BOW_GAME__.runtime;
+    const game = window.__KITE_BOW_GAME__;
     const position = window.__KITE_BOW_GAME__.getState().player.position;
     game.collisionTest({ position: [position.x, position.y, position.z] });
 
@@ -36,25 +90,25 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   });
   await page.keyboard.down('Space');
   const immediateJump = await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }),
+    window.__KITE_BOW_GAME__.collisionTest({ steps: 1 }),
   );
   await page.keyboard.up('Space');
   expect(immediateJump.position[1]).toBeGreaterThan(enteredPosition.y);
   await page.evaluate((position) => {
-    window.__KITE_BOW_GAME__.runtime.collisionTest({
+    window.__KITE_BOW_GAME__.collisionTest({
       position: [position.x, position.y, position.z],
     });
   }, enteredPosition);
   await page.keyboard.down('w');
-  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }));
+  await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ steps: 1 }));
   await page.keyboard.down('Space');
   const walkingJump = await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }),
+    window.__KITE_BOW_GAME__.collisionTest({ steps: 1 }),
   );
   await page.keyboard.up('Space');
   await page.keyboard.up('w');
   expect(walkingJump.position[1]).toBeGreaterThan(enteredPosition.y);
-  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ resume: true }));
+  await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ resume: true }));
   await page.waitForTimeout(3500);
   const hud = page.locator('#kite3d-bow-game-hud');
   await expect(hud.locator('[data-hud="modal"]')).toBeHidden();
@@ -83,7 +137,7 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   expect(visibleText).not.toMatch(/TIMBER|ASH.*LOCAL|WASD|FIELD BOW|ARROWS|HP|MS RTT/);
   await page.screenshot({ path: resolve(root, 'evidence/gritty-hud-gameplay.png') });
   const after = await page.evaluate(() => window.__KITE_BOW_GAME__?.getState());
-  expect(after?.bots).toHaveLength(3);
+  expect(after?.bots).toHaveLength(EXPECTED_SOLO_BOT_COUNT);
   expect(after?.elapsed).toBeGreaterThan(0.3);
   const moved = after.bots.some((bot, index) => {
     const prior = before.bots[index].position;
@@ -118,19 +172,17 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
 
   // Real key handlers feed the same 120 Hz step; deterministic bursts avoid software-WebGL wall-clock drift.
   const collision = await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({ position: [9, 0, 10], yaw: 0, steps: 2 }),
+    window.__KITE_BOW_GAME__.collisionTest({ position: [9, 0, 10], yaw: 0, steps: 2 }),
   );
   expect(collision.stats.buildMs).toBeLessThan(300);
   await page.keyboard.down('w');
-  const stopped = await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 240 }),
-  );
+  const stopped = await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ steps: 240 }));
   await page.keyboard.up('w');
   expect(stopped.position[2]).toBeGreaterThan(6.5);
   expect(stopped.position[2]).toBeLessThan(9);
   expect(stopped.penetration).toBeLessThan(0.01);
   await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({
+    window.__KITE_BOW_GAME__.collisionTest({
       position: [6.7, 0, -2.35],
       yaw: 0,
       steps: 30,
@@ -138,16 +190,12 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   );
   await page.keyboard.down('Space');
   await page.keyboard.down('w');
-  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 1 }));
+  await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ steps: 1 }));
   await page.keyboard.up('Space');
   await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.state.keys.delete('Space'));
-  const airborne = await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 51 }),
-  );
+  const airborne = await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ steps: 51 }));
   await page.keyboard.up('w');
-  const landed = await page.evaluate(() =>
-    window.__KITE_BOW_GAME__.runtime.collisionTest({ steps: 480 }),
-  );
+  const landed = await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ steps: 480 }));
   expect(airborne.position[1]).toBeGreaterThan(0.7);
   expect(landed.grounded, JSON.stringify({ airborne, landed })).toBe(true);
   expect(landed.position[1]).toBeGreaterThan(-0.05);
@@ -158,7 +206,7 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   for (const remote of [false, true]) {
     const impact = await page.evaluate(
       (remote) =>
-        window.__KITE_BOW_GAME__.runtime.collisionTest({
+        window.__KITE_BOW_GAME__.collisionTest({
           position: [0, 0, 17],
           fire: { origin: [9, 1.3, 10], direction: [0, 0, -1], remote },
           steps: 12,
@@ -170,14 +218,14 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
     impacts.push(impact);
   }
 
-  expect(landed.spawns).toHaveLength(10);
+  expect(landed.spawns).toHaveLength(4);
   for (const spawn of landed.spawns) {
     expect(spawn.penetration).toBeLessThan(0.001);
   }
-  await page.evaluate(() => window.__KITE_BOW_GAME__.runtime.collisionTest({ resume: true }));
+  await page.evaluate(() => window.__KITE_BOW_GAME__.collisionTest({ resume: true }));
   const evidenceDir = resolve(root, 'evidence');
   await mkdir(evidenceDir, { recursive: true });
-  await page.locator('#bow-canvas').screenshot({ path: resolve(evidenceDir, 'solo-arena.png') });
+  await page.locator('#kite3d-canvas').screenshot({ path: resolve(evidenceDir, 'solo-arena.png') });
   const log = {
     collision: { initial: collision, stopped, airborne, landed, impacts },
     url: page.url(),
@@ -245,55 +293,34 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
     game.updateHud();
   });
   await expect(hud.locator('.death-row')).toHaveCount(0);
-  await page.evaluate(() => window.__KITE_BOW_GAME__.stop());
+  const stoppedRuntimeRoots = await page.evaluate(() => {
+    const viewer = window.viewer;
+    window.__KITE_BOW_GAME__.stop();
+
+    return viewer.scene.children.filter((object) => object.name === 'K3D_BOW_RUNTIME').length;
+  });
   await expect(hud).toHaveCount(0);
+  expect(stoppedRuntimeRoots).toBe(0);
+  expect(failedResponses).toEqual([]);
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
 
 test('A saved username is reused without extension and can be cleared.', async ({ page }) => {
   test.setTimeout(90_000);
-  const joins = [];
-  await page.routeWebSocket('**/ws?**', (socket) => {
-    socket.send(
-      JSON.stringify({
-        v: 1,
-        type: 'welcome',
-        playerId: 'self',
-        roster: [{ id: 'self', name: 'Rust Hunter', slot: 0 }],
-        scores: { self: 0 },
-        scoreLimit: 20,
-        round: 1,
-      }),
-    );
-    socket.onMessage((rawMessage) => {
-      const message = JSON.parse(rawMessage);
-
-      if (message.type === 'join') {
-        joins.push(message.name);
-        socket.send(
-          JSON.stringify({
-            v: 1,
-            type: 'join',
-            playerId: 'self',
-            name: message.name,
-            slot: 0,
-          }),
-        );
-      }
-    });
-  });
-  await page.goto('/?online=1');
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  const webSockets = [];
+  page.on('websocket', (socket) => webSockets.push(socket.url()));
+  await page.goto('/?solo=1');
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true);
   const input = page.getByRole('textbox', { name: 'Archer name' });
   await expect(input).toHaveValue('');
   await expect(input).toHaveAttribute('placeholder', /^Archer-\d{4}$/);
   await input.fill('Rust Hunter');
   await page.getByRole('button', { name: 'ENTER ARENA' }).click();
-  await expect.poll(() => joins.at(-1)).toBe('Rust Hunter');
+  expect(await page.evaluate(() => window.__KITE_BOW_GAME__.getState().name)).toBe('Rust Hunter');
   const savedRecord = await page.evaluate(() => localStorage.getItem('bowgame.player-name.v1'));
   await page.reload();
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true);
   await expect(input).toHaveValue('');
   await expect(input).toHaveAttribute('placeholder', 'Rust Hunter');
   await page.screenshot({ path: resolve(root, 'evidence/gritty-username-entry.png') });
@@ -303,23 +330,26 @@ test('A saved username is reused without extension and can be cleared.', async (
     savedRecord,
   );
   await page.reload();
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true);
   await page.getByRole('button', { name: 'Clear saved name' }).click();
   await expect(input).toHaveAttribute('placeholder', /^Archer-\d{4}$/);
   expect(await page.evaluate(() => localStorage.getItem('bowgame.player-name.v1'))).toBeNull();
   await page.getByRole('button', { name: 'ENTER ARENA' }).click();
-  await expect.poll(() => joins.at(-1)).toMatch(/^Archer-\d{4}$/);
+  expect(await page.evaluate(() => window.__KITE_BOW_GAME__.getState().name)).toMatch(
+    /^Archer-\d{4}$/,
+  );
   expect(await page.evaluate(() => localStorage.getItem('bowgame.player-name.v1'))).toBeNull();
+  expect(webSockets).toEqual([]);
 });
 
 test('The stats.js panel sits top-left above the HUD and the viewer loop redraws it', async ({
   page,
 }) => {
   await page.goto('/?solo=1');
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true);
   const panel = page.locator('#stats-js');
   await expect(panel).toBeVisible();
-  // The HUD mounts when the runtime starts, which can finish after playerReady.
+  // The HUD mounts before the platform-ready telemetry is published.
   await expect(page.locator('#kite3d-bow-game-hud')).toBeAttached();
 
   const box = await panel.boundingBox();
@@ -354,7 +384,7 @@ test('The stats.js panel sits top-left above the HUD and the viewer loop redraws
 
 test('The hosted player creates its viewer with MSAA off', async ({ page }) => {
   await page.goto('/?solo=1');
-  await page.waitForFunction(() => document.documentElement.dataset.playerReady === 'true');
+  await page.waitForFunction(() => window.kite3dGame?.telemetry?.ready === true);
 
   // ExtendedRenderPass reads this flag each frame to choose the 4-sample target.
   expect(await page.evaluate(() => window.viewer.renderManager.msaa)).toBe(false);

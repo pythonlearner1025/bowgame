@@ -1,5 +1,5 @@
 node_modules/
-dist/
+.kite3d/
 .DS_Store
 test-results/
 playwright-report/
@@ -7,4 +7,3 @@ playwright-report/
 *.cpuprofile
 *.log
 evidence/*.gltf
-node_modules

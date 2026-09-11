@@ -1,122 +1,121 @@
-# Timber / Ash bow deathmatch
+# Bow Deathmatch
 
-Standalone Kite3D project for the local bow deathmatch. It uses Threepipe 0.5.1 from the clean checkout at `/private/tmp/kite3d/threepipe`; it does not depend on editor internals or a CDN.
+Bow Deathmatch is a published-Kite3D project with a three-bot solo mode and a separate online
+WebSocket room service. Kite3D 0.13.2 is the only page runtime: there is no Vite player and the
+Cloudflare Worker does not serve static files.
 
-## Code style
+## Development
 
-Read [CODESTYLE.md](CODESTYLE.md) before changing source. Formatting and linting are enforced by
-`npm run lint`; use `npm run format` or `npm run lint:fix` to apply mechanical fixes. Enable the
-committed pre-commit check once per clone:
+Read [CODESTYLE.md](CODESTYLE.md) before changing source. TypeScript in `src/` is compiled to
+committed ES modules in `scripts/`; never edit the generated JavaScript directly. Enable the
+repository hook once per clone so commits reject stale generated output:
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
-## Play online
-
-The deployed game is **https://bowgame.minjunesv0.workers.dev**. The hosted page joins the one `main` room automatically; edit the generated `Archer-####` name on the **ENTER ARENA** overlay, then enter. Up to 10 friends can play, the first player to 20 kills wins, and the next round starts about five seconds later. Add `?solo=1` to the live URL to force the original three-bot, first-to-10 game.
-
-## Setup and run
-
-Build the pinned engine without invoking its optional all-plugin `prepare` build:
+Install the pinned packages and run the local gates:
 
 ```sh
-cd /private/tmp/kite3d/threepipe
-npm install --ignore-scripts --no-audit --no-fund
-npm run compile
-```
-
-Install and verify this project:
-
-```sh
-cd /private/tmp/bowgame
-npm install --ignore-scripts --no-audit --no-fund
+npm ci
 npm test
+npm run check
+npm run doctor
 npm run build
-npm run preview
-```
-
-Open the printed local URL. Click **ENTER ARENA** to enable interaction and audio. The default controls are WASD/arrows, mouse aim, hold/release LMB, RMB steady aim, Shift sprint, Space jump, R restart, Escape pause, and M mute.
-
-## Diagnose flicker or lag
-
-Client diagnostics are always collected locally in a bounded, roughly five-minute ring buffer; no gameplay payloads are stored. Press **F8** to show or hide the compact debug overlay. Press **F9** to download the buffer as `bowgame-telemetry-<timestamp>.json`. Browser automation can read the same data with `window.__KITE_BOW_TELEMETRY__.exportData()`. A threepipe stats.js panel (`GLStatsJS`) shows frames per second in the top-left corner. Click it to switch between FPS, milliseconds per viewer loop, and memory (Chrome only).
-
-Each `samples[]` entry covers about one second and contains:
-
-- `at`, `windowMs`, `visible`, and `activeFrames`;
-- `frameTimeMs` and `gameCpuMs` (`count`, `p50`, `p95`, `max`), plus `renders`;
-- timestamped `rAFGaps` over 100 ms and `longTasks` from `PerformanceObserver` (useful for GC-like or other main-thread stalls);
-- `rttMs`, and `network.inbound` / `network.outbound` message counts and UTF-8 bytes, including `byType` totals;
-- timestamped `reconnects` and `socketCloses` (`code`, `wasClean`);
-- current `canvas` metrics and `canvasChanges` for backing/client size, device and renderer pixel ratios, and render scale;
-- `remoteStateStaleness.players` and `maxMs`, measuring time since the last state frame from each remote player.
-
-The `BowRoom` Worker writes JSON-only metadata to Workers Logs and never logs WebSocket payloads. Every line includes `service`, `event`, and `timestamp`.
-
-| `event`            | Additional fields                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `hibernation_wake` | `connectedCount`                                                                                                                         |
-| `join`             | `playerId`, `slot`, `connectedCount`                                                                                                     |
-| `leave`            | `playerId`, `slot`, `code`, `wasClean`, `connectedCount`                                                                                 |
-| `full`             | `connectedCount`, `roomCap`                                                                                                              |
-| `round_end`        | `round`, `winnerId`, `connectedCount`                                                                                                    |
-| `round_reset`      | `round`, `connectedCount`                                                                                                                |
-| `exception`        | `handler`, `errorName`, `errorMessage`, `connectedCount`                                                                                 |
-| `summary`          | `windowStartedAt`, `windowMs`, `inboundMessagesByType`, `outboundMessagesByType`, `broadcastFanOut`, `maxMessageBytes`, `connectedCount` |
-
-The hibernation-friendly 60-second summary is emitted on the first room activity after each minute; an idle room does not stay awake just to log.
-
-Run the deterministic scene check and the headless player smoke test with:
-
-```sh
-npm run generate:scene
 npm run e2e
-npm run export:scene
 ```
 
-`npm run export:scene` writes the seeded arena to `evidence/bow-arena.gltf`, a self-contained glTF file for external viewers. It is not committed.
+`npm run check` runs Kite3D's headless Playable, Editable, and Persisted checks. `npm run build`
+creates an audited release fixture in `.kite3d/e2e-release`; it does not publish or create a Vite
+`dist/` directory. Preview that fixture with `npm run preview:release`.
 
-Playwright is pinned to 1.62.1 because it matches cached Chromium revision 1234. `npm run e2e` uses software WebGL and writes [solo-arena.png](evidence/solo-arena.png) plus [e2e-run.json](evidence/e2e-run.json).
+The manifest requests render scale 1 with MSAA disabled. Hardware renderers retain the runtime's
+1.1 maximum and directional shadows. SwiftShader, llvmpipe, softpipe, lavapipe, and renderer
+names containing `software` use half scale without the 2048-pixel sun-shadow pass. A browser that
+hides renderer information takes the hardware path.
 
-## Run online locally
-
-Build the static player, then run the Worker and SQLite-backed Durable Object locally:
+Start the Kite3D editor without opening a browser automatically:
 
 ```sh
-npm run build
-npx wrangler dev
+npm run dev -- --no-open
 ```
 
-Open `http://localhost:8787/?online=1`. Use `?solo=1` to force solo mode. The full online test chooses a free port, starts and stops `wrangler dev`, opens two cached headless Chromium pages, and also probes the 10-player cap and round reset:
+The authored `assets/main.scene.gltf` and `assets/main.scene.bin` contain the component and a
+small stopped-mode preview. Press Play to replace the preview with the procedural arena; Stop
+removes the runtime-owned tree and restores the preview. Regenerate the scene with
+`npm run generate:scene`.
+
+The controls are WASD/arrows, mouse aim, hold/release LMB to shoot, RMB to steady aim, Shift to
+sprint, Space to jump, R to restart, Escape to pause, and M to mute. Click **ENTER ARENA** before
+playing so the canvas can receive input and audio permission.
+
+## Online mode
+
+Published pages on a real subdomain of `app.blitz.dev` join online mode by default. Every other
+host defaults to solo, which keeps Kite3D checks and ordinary local tests independent of a
+socket. Query parameters apply in this order:
+
+- `?solo=1` always selects solo mode.
+- `?online=1` selects online mode on other hosts.
+- `?ws=ws://...` or `?ws=wss://...` overrides the endpoint only when the page itself is on
+  `localhost`, `127.0.0.1`, or `[::1]`.
+
+The configured production endpoint is `wss://bowgame.minjunesv0.workers.dev/ws`. The client
+preserves the existing `room=main` and `name=<player>` connection query and version-1 JSON
+protocol. Online rooms allow 10 players and use a 20-kill score limit; online mode has no bots.
+
+The Worker accepts only `/ws`, then requires an allowed `Origin`, then requires a WebSocket
+upgrade. Allowed origins are HTTPS tenant subdomains below `app.blitz.dev` and HTTP/HTTPS
+loopback origins on any valid port. Missing, `null`, malformed, non-HTTP(S), bare
+`app.blitz.dev`, and lookalike suffix origins are rejected.
+
+Run the complete local release-plus-Worker integration with:
 
 ```sh
 npm run e2e:online
 ```
 
-Run the local Metal-first consecutive-frame probe (with automatic SwiftShader fallback) with:
+For manual testing, start `npm run preview:release` and `npx wrangler dev` in separate terminals,
+then open the release URL with `?online=1&ws=ws://127.0.0.1:8787/ws`. The automated runner
+chooses free ports and stops both processes.
+
+## Diagnostics
+
+Press F8 to toggle the bounded client diagnostics overlay and F9 to download its roughly
+five-minute telemetry buffer. Browser automation can read the same data from
+`window.__KITE_BOW_TELEMETRY__.exportData()`. The buffer records frame/game CPU distributions,
+render counts, long tasks, canvas changes, network counts and RTT, reconnects, socket closes,
+and remote-state staleness. It stores no gameplay payloads.
+
+The `GLStatsJS` panel in the top-left displays FPS, viewer-loop milliseconds, or memory. The room
+Worker emits payload-free structured events and a hibernation-friendly activity summary.
+
+Run the consecutive-frame browser probe with:
 
 ```sh
 npm run probe:flicker
 ```
 
-It writes `evidence/flicker-local.json` / `.png` by default. Set `BOWGAME_FLICKER_LABEL=<label>` to select another evidence label; the checked-in investigation baselines use `before` and `after`.
+It refreshes `evidence/flicker-after.json` and `.png` by default. Set
+`BOWGAME_FLICKER_LABEL=<label>` to choose a different evidence label.
 
-To deploy the static build and room relay to the configured Cloudflare account:
+`npm run export:scene` writes an uncommitted, self-contained procedural arena to
+`evidence/bow-arena.gltf` for external inspection.
+
+## Packages and release boundaries
+
+Kite supplies `three` and `threepipe` at runtime. Their exact packages, Kite3D, the engine,
+Playwright, and `three-mesh-bvh` are development dependencies because publishing strips
+development dependencies. The BVH browser module is vendored at a pinned hash under `vendor/`
+so release imports remain local. Runtime asset URLs are module-relative; `/kite3d/` is used only
+by Kite's loader.
+
+There are two independent outward operations, and neither is part of build or test:
 
 ```sh
-npm run build
-npx wrangler deploy
+npm run publish        # publish the Kite client
+npm run deploy:worker  # deploy the Cloudflare WebSocket service
 ```
 
-## Open in the Kite3D editor
-
-Start a Kite3D Blueprint Editor compatible with Threepipe 0.5.1, choose **Open project/folder**, and select `/private/tmp/bowgame`. The editor reads `assets/main.scene.glb`, registers `./scripts/BowGameComponent.script.js` from `package.json#kite.scripts`, and exposes the component’s `botCount`, `scoreLimit`, and `difficulty` state. Press Play, then click **ENTER ARENA**.
-
-The authored GLB is intentionally an empty `K3D_BOW_DEMO_ARENA` group with component state. The unchanged seeded arena is created only in play mode and cleaned up on stop; see [SCOPE.md](SCOPE.md) for the rationale and provenance.
-
-## Engine pin
-
-- Package: `threepipe@0.5.1`
-- Git commit: `52c3ec1730463d935a582cf999c3eecb0ac63c14`
-- Dependency: `file:/private/tmp/kite3d/threepipe`
+Run either only as an explicit release action. Publishing the Kite project never deploys the
+Worker. See [SCOPE.md](SCOPE.md) for architecture, protocol, trust limits, and asset provenance.

@@ -63,6 +63,10 @@ export class BowGameRuntime {
     this.performanceStats = options.performanceStats ?? null;
     this.world = new GameWorld(viewer, {
       arenaRoot: options.arenaRoot,
+      runtimeParent: options.runtimeParent,
+      authoredPreviewRoot: options.authoredPreviewRoot,
+      collisionTestEnabled: options.collisionTestEnabled,
+      isOnline: Boolean(options.session),
       ownsArena: options.ownsArena ?? false,
     });
     this.arrows = new ArrowSystem(this.state, this.world, () => this.requiredConfig, {

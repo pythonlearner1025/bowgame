@@ -1,28 +1,29 @@
-/** Verifies the generated scene's component metadata and asset invariants. */
+/** Verifies scene packaging facts that are outside Kite's semantic checks. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const bytes = await readFile(resolve(root, 'assets/main.scene.glb'));
-assert.equal(bytes.toString('ascii', 0, 4), 'glTF');
-assert.equal(bytes.readUInt32LE(4), 2);
-assert.equal(bytes.readUInt32LE(8), bytes.length);
-const jsonLength = bytes.readUInt32LE(12);
-assert.equal(bytes.toString('ascii', 16, 20), 'JSON');
-const gltf = JSON.parse(bytes.toString('utf8', 20, 20 + jsonLength).trimEnd());
-const arena = gltf.nodes.find((node) => node.name === 'K3D_BOW_DEMO_ARENA');
-assert.ok(arena, 'authored arena group is present');
-assert.equal(arena.mesh, undefined, 'fallback GLB intentionally has no baked geometry');
-assert.deepEqual(arena.extras.EntityComponentPlugin['bow-game'], {
-  type: 'BowGameComponent',
-  state: { botCount: 3, scoreLimit: 10, difficulty: 'normal' },
-});
-assert.deepEqual(arena.extras.kite3dBowArena, {
-  runtimeOnly: true,
-  seed: 'BowArena.seededRandom:73429',
-});
-console.log(
-  `verified GLB v2: ${bytes.length} bytes, ${gltf.nodes.length} node, component=BowGameComponent, bots=3, score=10, difficulty=normal, runtimeOnly=true`,
-);
+const scene = JSON.parse(await readFile(resolve(root, 'assets/main.scene.gltf'), 'utf8'));
+const binary = await readFile(resolve(root, 'assets/main.scene.bin'));
+const packageManifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+
+assert.equal(packageManifest.mainScene, 'assets/main.scene.gltf');
+assert.equal(scene.buffers.length, 1);
+assert.equal(scene.buffers[0].uri, 'main.scene.bin');
+assert.equal(scene.buffers[0].byteLength, binary.length);
+
+const externalResources = [...scene.buffers, ...(scene.images ?? [])];
+for (const resource of externalResources) {
+  if (resource.uri === undefined) {
+    continue;
+  }
+
+  // Reject data, root-relative, and scheme-prefixed URIs; only sibling project files are valid.
+  const forbiddenUriPattern = /^(?:data:|\/|[a-z]+:)/i;
+  assert.ok(!forbiddenUriPattern.test(resource.uri), `portable resource URI: ${resource.uri}`);
+  assert.ok(!resource.uri.includes('..'), `contained resource URI: ${resource.uri}`);
+}
+
+console.log(`verified scene packaging: ${scene.buffers[0].uri}, ${binary.length} binary bytes`);
