@@ -24,10 +24,7 @@ const bundled = await build({
       name: 'browser-independent-runtime',
       setup(secondValue) {
         secondValue.onResolve({ filter: /^threepipe$/ }, () => ({
-          path: new URL(
-            '../node_modules/threepipe/node_modules/three/build/three.module.js',
-            import.meta.url,
-          ).pathname,
+          path: new URL('../node_modules/three/build/three.module.js', import.meta.url).pathname,
         }));
         secondValue.onResolve({ filter: /BowArena\.ts$/ }, () => ({
           path: 'arena',

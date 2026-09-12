@@ -1,7 +1,7 @@
-/**
- * Adapts the bow runtime to Threepipe's component lifecycle without implementing gameplay itself.
- */
-import { Object3DComponent, literalStrings, } from 'threepipe';
+/** Adapts the bow runtime to Kite3D's component lifecycle and runtime-ownership contract. */
+import { RuntimeObjectOwner } from '@blitzdev/engine';
+import { Group, Object3DComponent, literalStrings, } from 'threepipe';
+import { createBowBootstrap } from './BowBootstrap.js';
 import { BowGameRuntime } from './BowGameRuntime.js';
 import { buildGameWorld } from './GameWorld.js';
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
@@ -17,7 +17,7 @@ const MIN_SCORE_LIMIT = 1;
 const MAX_SCORE_LIMIT = 50;
 // Ten eliminations preserves the serialized solo-match default.
 const DEFAULT_SCORE_LIMIT = 10;
-/** Owns arena and runtime lifetime for one serialized Threepipe component. */
+/** Owns one Play lifetime without placing generated objects below the authored source. */
 export class BowGameComponent extends Object3DComponent {
     static ComponentType = 'BowGameComponent';
     static StateProperties = [
@@ -37,56 +37,95 @@ export class BowGameComponent extends Object3DComponent {
     scoreLimit = DEFAULT_SCORE_LIMIT;
     difficulty = 'normal';
     runtime = null;
+    runtimeRoot = null;
+    runtimeOwner = null;
+    host = null;
+    rejectReady = null;
+    readiness = Promise.resolve();
     generation = 0;
-    /** Validates component state, creates the runtime arena, and starts the game asynchronously. */
+    /**
+     * Returns the current Play lifetime's asynchronous startup result.
+     *
+     * @returns A promise that resolves only after all runtime assets and systems are ready.
+     */
+    get ready() {
+        return this.readiness;
+    }
+    /** Creates the owned runtime root and begins asynchronous asset preload. */
     start() {
         const generation = ++this.generation;
-        const botCount = this.botCount;
-        const scoreLimit = this.scoreLimit;
-        const difficulty = this.difficulty;
-        if (!Number.isInteger(botCount) || botCount < MIN_BOT_COUNT || botCount > MAX_BOT_COUNT) {
+        const host = createBowBootstrap(this.ctx.viewer);
+        this.host = host;
+        window.__KITE_BOW_GAME__ = this;
+        this.readiness = new Promise((resolve, reject) => {
+            this.rejectReady = reject;
+            this.startRuntime({ generation, host, resolve });
+        });
+    }
+    startRuntime(options) {
+        try {
+            this.validateSettings();
+            const builtWorld = buildGameWorld({
+                botCount: this.botCount,
+                scoreLimit: this.scoreLimit,
+                difficulty: this.difficulty,
+            });
+            const runtimeRoot = new Group();
+            runtimeRoot.name = 'K3D_BOW_RUNTIME';
+            const runtimeOwner = new RuntimeObjectOwner(`bow-game:${this.uuid}`);
+            runtimeOwner.attachRuntimeRoot(runtimeRoot, this.ctx.viewer.scene, this.object);
+            runtimeRoot.add(builtWorld.arenaRoot);
+            this.runtimeRoot = runtimeRoot;
+            this.runtimeOwner = runtimeOwner;
+            const runtime = new BowGameRuntime(this.ctx.viewer, {
+                config: builtWorld.config,
+                arenaRoot: builtWorld.arenaRoot,
+                runtimeParent: runtimeRoot,
+                authoredPreviewRoot: this.object,
+                collisionTestEnabled: options.host.collisionTestEnabled,
+                isPaused: () => !this.ctx.ecp.running,
+                ownsArena: true,
+                session: options.host.session,
+                performanceStats: options.host.performanceStats,
+            });
+            this.runtime = runtime;
+            void runtime.start().then(() => this.finishStart(runtime, options.generation, options.resolve), (error) => this.failStart(error, options.generation));
+        }
+        catch (error) {
+            this.failStart(error, options.generation);
+        }
+    }
+    finishStart(runtime, generation, resolve) {
+        if (generation !== this.generation || this.runtime !== runtime) {
+            runtime.stop();
+            return;
+        }
+        this.rejectReady = null;
+        resolve();
+    }
+    failStart(error, generation) {
+        const reason = error instanceof Error ? error : new Error(String(error));
+        console.error('[BowGameComponent] Failed to start', reason);
+        if (generation === this.generation) {
+            this.rejectReady?.(reason);
+            this.rejectReady = null;
+            this.cleanupRuntime();
+        }
+    }
+    validateSettings() {
+        if (!Number.isInteger(this.botCount) ||
+            this.botCount < MIN_BOT_COUNT ||
+            this.botCount > MAX_BOT_COUNT) {
             throw new Error('botCount must be an integer from 1 to 6');
         }
-        if (!Number.isInteger(scoreLimit) ||
-            scoreLimit < MIN_SCORE_LIMIT ||
-            scoreLimit > MAX_SCORE_LIMIT) {
+        if (!Number.isInteger(this.scoreLimit) ||
+            this.scoreLimit < MIN_SCORE_LIMIT ||
+            this.scoreLimit > MAX_SCORE_LIMIT) {
             throw new Error('scoreLimit must be an integer from 1 to 50');
         }
-        if (!DIFFICULTIES.includes(difficulty)) {
+        if (!DIFFICULTIES.includes(this.difficulty)) {
             throw new Error('difficulty must be easy, normal, or hard');
         }
-        // The GLB intentionally stores this empty authored group plus component state.
-        // The unchanged seeded arena is runtime-only because its instancing is lossy in GLB.
-        const { arenaRoot, config } = buildGameWorld({
-            botCount,
-            scoreLimit,
-            difficulty,
-        });
-        this.object.add(arenaRoot);
-        const runtime = new BowGameRuntime(this.ctx.viewer, {
-            config,
-            arenaRoot,
-            isPaused: () => !this.ctx.ecp.running,
-            ownsArena: true,
-            session: window.__KITE_BOW_SESSION__ ?? null,
-            performanceStats: window.__KITE_BOW_TELEMETRY__ ?? null,
-        });
-        this.runtime = runtime;
-        window.__KITE_BOW_GAME__ = this;
-        void runtime
-            .start()
-            .then(() => {
-            if (generation !== this.generation || this.runtime !== runtime) {
-                runtime.stop();
-            }
-        })
-            .catch((error) => {
-            console.error('[BowGameComponent] Failed to start', error);
-            if (this.runtime === runtime) {
-                this.runtime = null;
-            }
-            runtime.stop();
-        });
     }
     /**
      * Advances the active runtime once per Threepipe frame.
@@ -99,24 +138,83 @@ export class BowGameComponent extends Object3DComponent {
     update({ deltaTime, time }) {
         return this.runtime?.update(deltaTime, time) ?? false;
     }
-    /** Stops and releases the runtime owned by this component. */
+    /** Stops runtime services and releases every Play-only object and browser resource. */
     stop() {
         this.generation++;
+        this.rejectReady?.(new Error('Bow game stopped before startup completed'));
+        this.rejectReady = null;
+        this.cleanupRuntime();
+    }
+    cleanupRuntime() {
         const runtime = this.runtime;
+        const runtimeOwner = this.runtimeOwner;
+        const host = this.host;
         this.runtime = null;
-        runtime?.stop();
-        if (window.__KITE_BOW_GAME__ === this) {
-            delete window.__KITE_BOW_GAME__;
+        this.runtimeRoot = null;
+        this.runtimeOwner = null;
+        this.host = null;
+        try {
+            runtime?.stop();
+        }
+        finally {
+            runtimeOwner?.cleanup();
+            host?.cleanup();
+            if (window.__KITE_BOW_GAME__ === this) {
+                delete window.__KITE_BOW_GAME__;
+            }
         }
     }
     /**
-     * Stops runtime resources before delegating component destruction to Threepipe.
+     * Stops resources before delegating component destruction to Threepipe.
      *
-     * @returns The base component's destruction result.
+     * @returns The base component's serialized destruction state.
      */
     destroy() {
         this.stop();
         return super.destroy();
+    }
+    /**
+     * Registers teardown work owned by the post-start Kite hook.
+     *
+     * @param callback - Idempotent cleanup for validation, telemetry, stats, or diagnostics.
+     */
+    addHostCleanup(callback) {
+        this.host?.addCleanup(callback);
+    }
+    /** Removes the component preload marker after the post-start hook is ready. */
+    removeLoading() {
+        this.host?.removeLoading();
+    }
+    /**
+     * Reports current gameplay mode without exposing transport implementation.
+     *
+     * @returns `online` for a configured session, otherwise `solo`.
+     */
+    getMode() {
+        return this.host?.mode ?? 'solo';
+    }
+    /**
+     * Validates the live runtime relationships needed by Kite's Playable check.
+     *
+     * @returns A platform validation result with individual lifecycle checks.
+     */
+    validateForKite() {
+        const checks = {
+            ready: Boolean(this.runtime?.state.running),
+            arena: Boolean(this.runtime?.world.getArenaRoot()),
+            collision: Boolean(this.runtime?.world.collision),
+            player: Boolean(this.runtime?.state.arm.parent),
+            runtimeRoot: this.runtimeRoot?.parent === this.ctx.viewer.scene,
+            worldRoot: this.runtime?.world.root.parent === this.runtimeRoot,
+        };
+        const hasFailedCheck = Object.values(checks).includes(false);
+        return {
+            status: hasFailedCheck ? 'fail' : 'pass',
+            summary: hasFailedCheck
+                ? 'Bow runtime did not establish every required Play relationship.'
+                : 'Bow runtime and its owned scene root are ready.',
+            checks,
+        };
     }
     /**
      * Returns the current runtime snapshot, or null before start and after stop.
@@ -125,6 +223,30 @@ export class BowGameComponent extends Object3DComponent {
      */
     getState() {
         return this.runtime?.getState() ?? null;
+    }
+    /**
+     * Applies the deterministic visual inspection controls used by browser tests.
+     *
+     * @param options - Camera and bow-pose inspection values.
+     * @returns Current serializable runtime state.
+     */
+    inspect(options) {
+        if (!this.runtime) {
+            throw new Error('Bow game is not running');
+        }
+        return this.runtime.inspect(options);
+    }
+    /**
+     * Exercises collision behavior when the explicit capability was enabled at startup.
+     *
+     * @param action - Movement and projectile controls for deterministic inspection.
+     * @returns Collision and player state after the requested fixed steps.
+     */
+    collisionTest(action) {
+        if (!this.runtime) {
+            throw new Error('Bow game is not running');
+        }
+        return this.runtime.collisionTest(action);
     }
 }
 export default BowGameComponent;

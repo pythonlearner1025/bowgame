@@ -9,11 +9,14 @@
 /* eslint-disable no-magic-numbers */
 import { Bone, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Group, MeshStandardMaterial, Skeleton, SkinnedMesh, Texture, TextureLoader, SRGBColorSpace, Vector3, Quaternion, } from 'threepipe';
 import { handOrientation, poseHandFingers } from './BowHandPose.js';
+import { bowAssetUrl } from './BowAssetUrl.js';
 let asset;
 let skinTexture;
 let eyeTexture;
 let pending;
-const base = '/kite/assets/bow-survivor/';
+const HUMAN_ASSET_URL = bowAssetUrl('bow-survivor/male-adult-rigged.json');
+const SKIN_TEXTURE_URL = bowAssetUrl('bow-survivor/skin-male.png');
+const EYE_TEXTURE_URL = bowAssetUrl('bow-survivor/eyes-brown.png');
 /**
  * Reads the currently cached anatomy and skin texture for first-person arm construction.
  *
@@ -29,14 +32,14 @@ export function getHumanArmSource() {
  */
 export function preloadHumanAsset() {
     return (pending ??= Promise.all([
-        fetch(base + 'male-adult-rigged.json').then((response) => {
+        fetch(HUMAN_ASSET_URL).then((response) => {
             if (!response.ok) {
                 throw new Error('Adult model unavailable');
             }
             return response.json();
         }),
-        new TextureLoader().loadAsync(base + 'skin-male.png'),
-        new TextureLoader().loadAsync(base + 'eyes-brown.png'),
+        new TextureLoader().loadAsync(SKIN_TEXTURE_URL),
+        new TextureLoader().loadAsync(EYE_TEXTURE_URL),
     ]).then(([data, map, eyes]) => {
         asset = data;
         skinTexture = map;

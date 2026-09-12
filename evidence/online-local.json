@@ -1,15 +1,22 @@
 {
   "mode": "local",
-  "baseURL": "http://127.0.0.1:64227",
+  "baseURL": "http://127.0.0.1:60670",
+  "webSocketEndpoint": "ws://127.0.0.1:60673/ws",
+  "originGate": {
+    "notFound": 404,
+    "missing": 403,
+    "hostile": 403,
+    "allowedWithoutUpgrade": 426
+  },
   "roster": [
     {
-      "id": "043f06d5-18ff-4a5a-bdd5-0e33a861e486",
+      "id": "976b61dc-089f-4736-8aac-4c3d5f7a5f2c",
       "name": "Archer-A",
       "slot": 0,
       "local": true
     },
     {
-      "id": "d1ce16d6-897b-4019-a77f-da2992aa26a7",
+      "id": "3ffb5005-91cb-47f0-8b6e-97b6e4a33b75",
       "name": "Archer-B",
       "slot": 1,
       "local": false
@@ -20,27 +27,27 @@
     1
   ],
   "scoresBefore": {
-    "043f06d5-18ff-4a5a-bdd5-0e33a861e486": 0,
-    "d1ce16d6-897b-4019-a77f-da2992aa26a7": 0
+    "976b61dc-089f-4736-8aac-4c3d5f7a5f2c": 0,
+    "3ffb5005-91cb-47f0-8b6e-97b6e4a33b75": 0
   },
   "scoresAfter": {
-    "d1ce16d6-897b-4019-a77f-da2992aa26a7": 0,
-    "043f06d5-18ff-4a5a-bdd5-0e33a861e486": 1
+    "3ffb5005-91cb-47f0-8b6e-97b6e4a33b75": 0,
+    "976b61dc-089f-4736-8aac-4c3d5f7a5f2c": 1
   },
   "victimHealthAfter": 0,
-  "latencyMs": 50.09999990463257,
+  "latencyMs": 51,
   "cap": {
     "accepted": 10,
     "eleventhRejected": true
   },
   "round": {
-    "winnerId": "b248a490-5b78-4174-b315-3dca063487a9",
+    "winnerId": "416f51a4-f6d7-4ad4-a7a3-b7505bc21872",
     "scores": {
-      "315f86f9-2e00-4e28-8a17-f3cc9f10276e": 0,
-      "b248a490-5b78-4174-b315-3dca063487a9": 20
+      "a080cb9e-e7d9-4800-8090-3e08b5f43f5b": 0,
+      "416f51a4-f6d7-4ad4-a7a3-b7505bc21872": 20
     },
     "resetRound": 2,
-    "resetDelayMs": 5011
+    "resetDelayMs": 5016
   },
   "consoleErrors": []
 }

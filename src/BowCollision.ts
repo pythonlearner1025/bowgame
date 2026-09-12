@@ -16,7 +16,11 @@ import {
   type InstancedMesh,
   type Mesh,
 } from 'three';
-import { CENTER, MeshBVH, type ExtendedTriangle } from 'three-mesh-bvh';
+import {
+  CENTER,
+  MeshBVH,
+  type ExtendedTriangle,
+} from '../vendor/three-mesh-bvh-0.9.5/index.module.js';
 
 // The local player uses a 38-centimeter upright collision radius.
 export const PLAYER_RADIUS = 0.38;

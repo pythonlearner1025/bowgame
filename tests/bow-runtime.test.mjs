@@ -22,10 +22,7 @@ const bundled = await build({
       setup(secondValue) {
         // Keep real Three geometry/vectors, replace only the browser-only arena authoring factory.
         secondValue.onResolve({ filter: /^threepipe$/ }, () => ({
-          path: new URL(
-            '../node_modules/threepipe/node_modules/three/build/three.module.js',
-            import.meta.url,
-          ).pathname,
+          path: new URL('../node_modules/three/build/three.module.js', import.meta.url).pathname,
         }));
         secondValue.onResolve({ filter: /BowArena\.ts$/ }, () => ({
           path: 'arena',

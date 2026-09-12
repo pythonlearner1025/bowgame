@@ -28,6 +28,9 @@ export interface BowGameConfig {
 export interface BowGameRuntimeOptions {
   config?: BowGameConfig;
   arenaRoot?: Group;
+  runtimeParent?: Object3D;
+  authoredPreviewRoot?: Object3D;
+  collisionTestEnabled?: boolean;
   isPaused?: () => boolean;
   ownsArena?: boolean;
   session?: BowNetSession | null;

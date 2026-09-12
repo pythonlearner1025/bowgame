@@ -8,6 +8,7 @@ import { shotDamage } from './BowPhysics.js';
 export class NetworkGlue {
     state;
     session;
+    settings;
     callbacks;
     unsubscribe = null;
     /**
@@ -15,11 +16,13 @@ export class NetworkGlue {
      *
      * @param state - Mutable simulation state shared by all systems.
      * @param session - Online session, or null for unchanged solo play.
+     * @param settings - Player key bindings used to select the local walk animation.
      * @param callbacks - State, combat, projectile, remote-player, and HUD side effects.
      */
-    constructor(state, session, callbacks) {
+    constructor(state, session, settings, callbacks) {
         this.state = state;
         this.session = session;
+        this.settings = settings;
         this.callbacks = callbacks;
     }
     /** Subscribes to session changes and opens the transport when online. */
@@ -135,14 +138,7 @@ export class NetworkGlue {
         });
     }
     getAnimation() {
-        const isMoving = this.state.keys.has('KeyW') ||
-            this.state.keys.has('KeyA') ||
-            this.state.keys.has('KeyS') ||
-            this.state.keys.has('KeyD') ||
-            this.state.keys.has('ArrowUp') ||
-            this.state.keys.has('ArrowDown') ||
-            this.state.keys.has('ArrowLeft') ||
-            this.state.keys.has('ArrowRight');
+        const isMoving = this.settings.isAnyMovementActive(this.state.keys);
         if (this.state.hp <= 0) {
             return 'dead';
         }

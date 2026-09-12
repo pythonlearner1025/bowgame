@@ -21,6 +21,8 @@ export class FakeStyle {
 export class FakeElement {
   attributes = new Map();
   children = [];
+  classes = new Set();
+  listeners = new Map();
   dataset = {};
   style = new FakeStyle();
   parentElement = null;
@@ -38,6 +40,14 @@ export class FakeElement {
   title = '';
   type = '';
   value = '';
+  role = '';
+  tabIndex = -1;
+
+  classList = {
+    add: (...names) => names.forEach((name) => this.classes.add(name)),
+    remove: (...names) => names.forEach((name) => this.classes.delete(name)),
+    contains: (name) => this.classes.has(name),
+  };
 
   /**
    * Creates an element with a browser-style upper-case tag name.
@@ -70,6 +80,29 @@ export class FakeElement {
       child.parentElement = this;
       this.children.push(child);
     }
+  }
+
+  /**
+   * Finds one descendant by its element id.
+   * @param {string} selector - Supported `#id` selector.
+   * @returns {FakeElement | null} First matching descendant.
+   */
+  querySelector(selector) {
+    if (!selector.startsWith('#')) {
+      return null;
+    }
+    const id = selector.slice(1);
+    for (const child of this.children) {
+      if (child.id === id) {
+        return child;
+      }
+      const descendant = child.querySelector(selector);
+      if (descendant) {
+        return descendant;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -147,11 +180,25 @@ export class FakeElement {
     return { left: 10, top: 20, width: 800, height: 450 };
   }
 
-  /** Accepts listeners needed by player-controller lifecycle tests. */
-  addEventListener() {}
+  /**
+   * Accepts listeners needed by player-controller lifecycle tests.
+   * @param {string} type - Browser event type.
+   * @param {Function} handler - Listener retained by the fake.
+   */
+  addEventListener(type, handler) {
+    this.listeners.set(type, handler);
+  }
 
-  /** Removes listeners accepted by the fake. */
-  removeEventListener() {}
+  /**
+   * Removes listeners accepted by the fake.
+   * @param {string} type - Browser event type.
+   * @param {Function} handler - Previously retained listener.
+   */
+  removeEventListener(type, handler) {
+    if (this.listeners.get(type) === handler) {
+      this.listeners.delete(type);
+    }
+  }
 
   /**
    * Grants pointer lock to this element.
@@ -206,12 +253,20 @@ export function installBrowserGlobals() {
   globalThis.HTMLInputElement = FakeElement;
   globalThis.HTMLButtonElement = FakeElement;
   const body = new FakeElement('body');
+  const head = new FakeElement('head');
   const documentValue = {
     activeElement: null,
     body,
+    head,
     pointerLockElement: null,
     createElement(tagName) {
-      return new FakeElement(tagName);
+      const element = new FakeElement(tagName);
+      element.ownerDocument = this;
+
+      return element;
+    },
+    getElementById(id) {
+      return this.head.querySelector(`#${id}`) ?? this.body.querySelector(`#${id}`);
     },
     addEventListener() {},
     removeEventListener() {},
@@ -220,6 +275,8 @@ export function installBrowserGlobals() {
     },
   };
   globalThis.document = documentValue;
+  body.ownerDocument = documentValue;
+  head.ownerDocument = documentValue;
   globalThis.localStorage = new FakeStorage();
   globalThis.location = { href: 'http://localhost/', search: '' };
   globalThis.window = {
@@ -261,9 +318,11 @@ export function makeConfig() {
 
 /**
  * Creates a small viewer with real Three groups and camera math.
+ * @param {{rendererName?: string}} options - Optional renderer identity returned by the fake GL
+ * context.
  * @returns {Promise<object>} Minimal Threepipe-compatible viewer.
  */
-export async function makeViewer() {
+export async function makeViewer(options = {}) {
   const { Group, PerspectiveCamera, Vector3 } = await import('threepipe');
   const scene = new Group();
   scene.modelRoot = new Group();
@@ -274,12 +333,29 @@ export async function makeViewer() {
   scene.mainCamera.controlsMode = 'orbit';
   const canvas = new FakeElement('canvas');
   const container = new FakeElement('main');
+  canvas.ownerDocument = document;
+  container.ownerDocument = document;
 
   return {
     canvas,
     container,
     scene,
-    renderManager: { renderScale: 2 },
+    renderManager: {
+      renderScale: 2,
+      renderer: {
+        getContext() {
+          return {
+            RENDERER: 0x1f01,
+            getExtension() {
+              return null;
+            },
+            getParameter() {
+              return options.rendererName ?? 'Test hardware renderer';
+            },
+          };
+        },
+      },
+    },
     dirtyCalls: 0,
     setDirty() {
       this.dirtyCalls++;

@@ -5,6 +5,7 @@ import { loadSystem, makeConfig, makeViewer } from './helpers/bow-system-harness
 
 const { PlayerController } = await loadSystem('PlayerController');
 const { GameState } = await loadSystem('GameState');
+const { BowSettings } = await loadSystem('BowSettings');
 const { Vector3 } = await import('threepipe');
 
 /**
@@ -16,6 +17,7 @@ async function startedController() {
   const config = makeConfig();
   const state = new GameState(config);
   const viewer = await makeViewer();
+  const settings = new BowSettings();
   state.running = true;
   state.active = true;
   const controller = new PlayerController({
@@ -24,6 +26,7 @@ async function startedController() {
     world: { collision: null, trails: null },
     bow: { updateViewModel() {}, hideViewModel() {} },
     bots: {},
+    settings,
     getConfig: () => config,
     callbacks: {
       enter() {},
@@ -31,6 +34,7 @@ async function startedController() {
       stepRespawn() {},
       getAudio: () => null,
       isOnline: () => false,
+      isCapturingKey: () => false,
     },
   });
   controller.start();
@@ -89,6 +93,7 @@ test('Stopping restores the camera when the viewer never had controls', async ()
   const config = makeConfig();
   const state = new GameState(config);
   const viewer = await makeViewer();
+  const settings = new BowSettings();
   const camera = viewer.scene.mainCamera;
   delete camera.controls;
   camera.controlsMode = '';
@@ -99,6 +104,7 @@ test('Stopping restores the camera when the viewer never had controls', async ()
     world: { collision: null, trails: null },
     bow: { updateViewModel() {}, hideViewModel() {} },
     bots: {},
+    settings,
     getConfig: () => config,
     callbacks: {
       enter() {},
@@ -106,6 +112,7 @@ test('Stopping restores the camera when the viewer never had controls', async ()
       stepRespawn() {},
       getAudio: () => null,
       isOnline: () => false,
+      isCapturingKey: () => false,
     },
   });
 

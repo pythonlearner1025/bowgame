@@ -64,6 +64,23 @@ are allowed only when a comment states the measured reason.
 - Model protocol messages as discriminated unions.
 - Do not use a non-null assertion (`!`) without a comment explaining why the value cannot be null.
 
+## Generated runtime modules
+
+TypeScript in `src/` is authoritative. Compile it with `npm run compile:scripts`; never hand-edit
+the committed `scripts/*.js` output. Every relative source import names its emitted `.js` file so
+the same module graph works in Kite development, static checking, and published releases.
+
+Raw browser asset consumers use `bowAssetUrl()` and never use Kite's loader-only `/kite3d/`
+prefix. Runtime imports are limited to Kite-provided bare modules and explicit project-relative
+files such as the pinned BVH bundle.
+
+## Kite runtime ownership
+
+Authored scene objects stay below `viewer.scene.modelRoot`. Every play-only object belongs below
+the one root attached by `RuntimeObjectOwner`; systems receive that parent explicitly rather than
+adding unrelated roots to the scene. Stop and failed-start paths dispose system-owned resources,
+clean the owner, and restore authored visibility so Play/Stop and hot reload are idempotent.
+
 ## Responsibilities and errors
 
 Functions do one thing. Separate computing from mutation when practical. Avoid boolean flag

@@ -8,6 +8,8 @@
 /** Identifies one sound emitted by the bow audio system. */
 export type BowSound = 'draw' | 'release' | 'flight' | 'whizz' | 'body' | 'head' | 'cover';
 
+import { bowAssetUrl } from './BowAssetUrl.js';
+
 /** Describes a world-space audio position in meters. */
 export interface AudioPoint {
   x: number;
@@ -30,8 +32,8 @@ export const BOW_AUDIO_MIX = {
 } as const;
 /** Stable public paths for the two recorded foley layers. */
 export const BOW_RECORDED_AUDIO = {
-  release: '/kite/assets/bow-audio/release-recorded.wav',
-  whizz: '/kite/assets/bow-audio/whizz-recorded.wav',
+  release: bowAssetUrl('bow-audio/release-recorded.wav'),
+  whizz: bowAssetUrl('bow-audio/whizz-recorded.wav'),
 } as const;
 /** Per-recording gain corrections measured against the procedural layers. */
 export const BOW_RECORDED_MIX = { release: 0.8, whizz: 0.9 } as const;

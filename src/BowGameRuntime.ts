@@ -6,6 +6,7 @@ import type { ThreeViewer } from 'threepipe';
 import { ArrowSystem } from './ArrowSystem.js';
 import { BotSystem } from './BotSystem.js';
 import { BowController } from './BowController.js';
+import { BowSettings } from './BowSettings.js';
 import { CombatRules } from './CombatRules.js';
 import { EntryOverlay } from './EntryOverlay.js';
 import {
@@ -33,6 +34,7 @@ export type { BowGameConfig, BowGameRuntimeOptions } from './GameState.js';
 /** Coordinates the stable public game surface while delegating each owner responsibility. */
 export class BowGameRuntime {
   readonly state: GameState;
+  readonly settings: BowSettings;
   readonly world: GameWorld;
   readonly arrows: ArrowSystem;
   readonly bots: BotSystem;
@@ -59,10 +61,15 @@ export class BowGameRuntime {
     options: BowGameRuntimeOptions = {},
   ) {
     this.state = new GameState(options.config);
+    this.settings = new BowSettings();
     this.isPaused = options.isPaused ?? (() => false);
     this.performanceStats = options.performanceStats ?? null;
     this.world = new GameWorld(viewer, {
       arenaRoot: options.arenaRoot,
+      runtimeParent: options.runtimeParent,
+      authoredPreviewRoot: options.authoredPreviewRoot,
+      collisionTestEnabled: options.collisionTestEnabled,
+      isOnline: Boolean(options.session),
       ownsArena: options.ownsArena ?? false,
     });
     this.arrows = new ArrowSystem(this.state, this.world, () => this.requiredConfig, {
@@ -96,7 +103,7 @@ export class BowGameRuntime {
         updateCamera: () => this.playerController.updateCamera(),
       },
     );
-    this.network = new NetworkGlue(this.state, options.session ?? null, {
+    this.network = new NetworkGlue(this.state, options.session ?? null, this.settings, {
       getSlotSpawn: (slot) => this.world.getSlotSpawn(this.requiredConfig, slot),
       syncRemotePlayers: (snapshot) => this.remotePlayers.sync(snapshot),
       spawnArrow: (position, velocity, spawnOptions) =>
@@ -118,6 +125,7 @@ export class BowGameRuntime {
       },
     });
     this.entry = new EntryOverlay(viewer, this.state, () => this.requiredConfig, {
+      settings: this.settings,
       isOnline: () => this.network.isOnline(),
       isConnected: () => this.network.isConnected(),
       getNetworkName: () => this.network.getName(),
@@ -131,6 +139,7 @@ export class BowGameRuntime {
       world: this.world,
       bow: this.bow,
       bots: this.bots,
+      settings: this.settings,
       getConfig: () => this.requiredConfig,
       callbacks: {
         enter: () => this.entry.enter(),
@@ -138,6 +147,7 @@ export class BowGameRuntime {
         stepRespawn: () => this.combat.stepRespawn(),
         getAudio: () => this.state.sounds,
         isOnline: () => this.network.isOnline(),
+        isCapturingKey: () => this.entry.isCapturingKey(),
       },
     });
   }

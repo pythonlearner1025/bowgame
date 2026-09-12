@@ -7,6 +7,7 @@ import type { BowAudio } from './BowAudio.js';
 import type { BowController } from './BowController.js';
 import type { BotSystem } from './BotSystem.js';
 import { GRAVITY, moveWithCover } from './BowPhysics.js';
+import type { BowSettings } from './BowSettings.js';
 import type { BowGameConfig, CameraRestoreState, GameState } from './GameState.js';
 import type { GameWorld } from './GameWorld.js';
 
@@ -16,6 +17,15 @@ const COYOTE_WINDOW_SECONDS = 0.1;
 // The original 4.8-meter-per-second impulse preserves the established jump arc.
 const JUMP_SPEED_METERS_PER_SECOND = 4.8;
 
+// Existing aim sensitivity keeps fine adjustment unchanged while drawing or aiming.
+const AIM_MOUSE_SENSITIVITY_RADIANS_PER_PIXEL = 0.0011;
+
+// Existing hip sensitivity keeps default turning unchanged outside the aim state.
+const HIP_MOUSE_SENSITIVITY_RADIANS_PER_PIXEL = 0.0018;
+
+// Existing pitch limit prevents the first-person view from rotating beyond vertical.
+const MAX_PITCH_RADIANS = 1.25;
+
 /** Lifecycle and rule side effects invoked by local input or movement. */
 export interface PlayerControllerCallbacks {
   enter: () => void;
@@ -23,6 +33,7 @@ export interface PlayerControllerCallbacks {
   stepRespawn: () => void;
   getAudio: () => BowAudio | null;
   isOnline: () => boolean;
+  isCapturingKey: () => boolean;
 }
 
 /** Construction dependencies for the local input and camera controller. */
@@ -32,6 +43,7 @@ export interface PlayerControllerOptions {
   world: GameWorld;
   bow: BowController;
   bots: BotSystem;
+  settings: BowSettings;
   getConfig: () => BowGameConfig;
   callbacks: PlayerControllerCallbacks;
 }
@@ -43,6 +55,7 @@ export class PlayerController {
   private world: GameWorld;
   private bow: BowController;
   private bots: BotSystem;
+  private settings: BowSettings;
   private getConfig: () => BowGameConfig;
   private callbacks: PlayerControllerCallbacks;
   private cameraRestore: CameraRestoreState | null = null;
@@ -58,6 +71,7 @@ export class PlayerController {
     this.world = options.world;
     this.bow = options.bow;
     this.bots = options.bots;
+    this.settings = options.settings;
     this.getConfig = options.getConfig;
     this.callbacks = options.callbacks;
   }
@@ -156,24 +170,14 @@ export class PlayerController {
    * @param event - Keyboard press routed from the capture-phase window listener.
    */
   onKeyDown = (event: KeyboardEvent): void => {
+    if (this.callbacks.isCapturingKey()) {
+      return;
+    }
+
     if (
       !this.state.running ||
       this.isTyping(event.target) ||
-      ![
-        'KeyW',
-        'KeyA',
-        'KeyS',
-        'KeyD',
-        'ArrowUp',
-        'ArrowDown',
-        'ArrowLeft',
-        'ArrowRight',
-        'ShiftLeft',
-        'ShiftRight',
-        'Space',
-        'KeyR',
-        'KeyM',
-      ].includes(event.code)
+      !this.settings.isBoundCode(event.code)
     ) {
       return;
     }
@@ -181,11 +185,11 @@ export class PlayerController {
     event.preventDefault();
     event.stopImmediatePropagation();
 
-    if (event.code === 'KeyR' && !event.repeat) {
+    if (this.settings.getBinding('restart').includes(event.code) && !event.repeat) {
       if (!this.callbacks.isOnline()) {
         this.callbacks.restart();
       }
-    } else if (event.code === 'KeyM' && !event.repeat) {
+    } else if (this.settings.getBinding('mute').includes(event.code) && !event.repeat) {
       const audio = this.callbacks.getAudio();
 
       if (audio) {
@@ -201,6 +205,10 @@ export class PlayerController {
    * @param event - Keyboard release routed from the capture-phase window listener.
    */
   onKeyUp = (event: KeyboardEvent): void => {
+    if (this.callbacks.isCapturingKey()) {
+      return;
+    }
+
     if (this.state.keys.delete(event.code)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -256,11 +264,19 @@ export class PlayerController {
       return;
     }
 
-    this.state.yaw -= event.movementX * (this.state.aiming ? 0.0011 : 0.0018);
-    this.state.pitch = Math.max(
-      -1.25,
-      Math.min(1.25, this.state.pitch - event.movementY * (this.state.aiming ? 0.0011 : 0.0018)),
-    );
+    const baseSensitivity = this.state.aiming
+      ? AIM_MOUSE_SENSITIVITY_RADIANS_PER_PIXEL
+      : HIP_MOUSE_SENSITIVITY_RADIANS_PER_PIXEL;
+    // One multiplier preserves the deliberate ratio between aim and hip mouse sensitivity.
+    const sensitivity = baseSensitivity * this.settings.mouseSensitivity;
+    this.state.yaw -= event.movementX * sensitivity;
+    let nextPitch = this.state.pitch - event.movementY * sensitivity;
+
+    if (this.settings.invertMouseY) {
+      nextPitch = this.state.pitch + event.movementY * sensitivity;
+    }
+
+    this.state.pitch = Math.max(-MAX_PITCH_RADIANS, Math.min(MAX_PITCH_RADIANS, nextPitch));
     event.stopImmediatePropagation();
   };
 
@@ -295,15 +311,14 @@ export class PlayerController {
     }
 
     const x =
-      Number(this.state.keys.has('KeyD') || this.state.keys.has('ArrowRight')) -
-      Number(this.state.keys.has('KeyA') || this.state.keys.has('ArrowLeft'));
+      Number(this.settings.isActionActive(this.state.keys, 'moveRight')) -
+      Number(this.settings.isActionActive(this.state.keys, 'moveLeft'));
     const z =
-      Number(this.state.keys.has('KeyS') || this.state.keys.has('ArrowDown')) -
-      Number(this.state.keys.has('KeyW') || this.state.keys.has('ArrowUp'));
+      Number(this.settings.isActionActive(this.state.keys, 'moveBack')) -
+      Number(this.settings.isActionActive(this.state.keys, 'moveForward'));
     const length = Math.hypot(x, z) || 1;
     const isSprinting =
-      (this.state.keys.has('ShiftLeft') || this.state.keys.has('ShiftRight')) &&
-      !this.state.drawing;
+      this.settings.isActionActive(this.state.keys, 'sprint') && !this.state.drawing;
     let speed = 4.5;
 
     if (this.state.drawing) {
@@ -335,7 +350,10 @@ export class PlayerController {
         this.state.coyoteSecondsRemaining = Math.max(0, this.state.coyoteSecondsRemaining - dt);
       }
 
-      if (this.state.keys.has('Space') && this.state.coyoteSecondsRemaining > 0) {
+      if (
+        this.settings.isActionActive(this.state.keys, 'jump') &&
+        this.state.coyoteSecondsRemaining > 0
+      ) {
         this.state.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
         this.state.grounded = false;
         this.state.coyoteSecondsRemaining = 0;
@@ -354,7 +372,7 @@ export class PlayerController {
     // Legacy geometry-free harness callers; the hosted arena always owns a BVH.
     this.state.player.copy(moveWithCover(this.state.player, dx, dz, this.getConfig().obstacles));
 
-    if (this.state.keys.has('Space') && this.state.player.y === 0) {
+    if (this.settings.isActionActive(this.state.keys, 'jump') && this.state.player.y === 0) {
       this.state.velocity.y = JUMP_SPEED_METERS_PER_SECOND;
     }
 

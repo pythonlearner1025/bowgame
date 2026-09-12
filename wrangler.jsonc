@@ -6,12 +6,6 @@
   "workers_dev": true,
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "run_worker_first": ["/ws"],
-    "not_found_handling": "single-page-application",
-  },
   "durable_objects": {
     "bindings": [{ "name": "BOW_ROOM", "class_name": "BowRoom" }],
   },

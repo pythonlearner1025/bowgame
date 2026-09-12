@@ -1,0 +1,353 @@
+{
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        3,
+        0.10000000149011612,
+        3
+      ],
+      "min": [
+        -3,
+        -0.10000000149011612,
+        -3
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        1,
+        1,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        1,
+        1
+      ],
+      "min": [
+        0,
+        0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 36,
+      "max": [
+        23
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        0.800000011920929,
+        0.800000011920929,
+        0.07500000298023224
+      ],
+      "min": [
+        -0.800000011920929,
+        -0.800000011920929,
+        -0.07500000298023224
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        1,
+        1,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 24,
+      "max": [
+        1,
+        1
+      ],
+      "min": [
+        0,
+        0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5123,
+      "count": 36,
+      "max": [
+        23
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "generator": "THREE.GLTFExporter",
+    "subversion": 1,
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 288,
+      "byteOffset": 0,
+      "byteStride": 12,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 288,
+      "byteOffset": 288,
+      "byteStride": 12,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 192,
+      "byteOffset": 576,
+      "byteStride": 8,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 72,
+      "byteOffset": 768,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 288,
+      "byteOffset": 840,
+      "byteStride": 12,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 288,
+      "byteOffset": 1128,
+      "byteStride": 12,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 192,
+      "byteOffset": 1416,
+      "byteStride": 8,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 72,
+      "byteOffset": 1608,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 1680,
+      "uri": "main.scene.bin"
+    }
+  ],
+  "extensionsUsed": [
+    "KHR_materials_unlit"
+  ],
+  "materials": [
+    {
+      "extensions": {
+        "KHR_materials_unlit": {}
+      },
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.09758734713304495,
+          0.12743768042608497,
+          0.10702310296918527,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.9
+      }
+    },
+    {
+      "extensions": {
+        "KHR_materials_unlit": {}
+      },
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.37626212298046485,
+          0.04666508633021928,
+          0.02732089163382382,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.9
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 5,
+            "POSITION": 4,
+            "TEXCOORD_0": 6
+          },
+          "indices": 7,
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "extras": {
+        "gltfUUID": "eb5a9be8-f0af-454c-b07a-ce7a284883d5"
+      },
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        -0.1,
+        0,
+        1
+      ],
+      "mesh": 0,
+      "name": "K3D_BOW_PREVIEW_FLOOR"
+    },
+    {
+      "extras": {
+        "gltfUUID": "450f32f1-c23f-44a8-9789-52e163983612"
+      },
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1.2,
+        0,
+        1
+      ],
+      "mesh": 1,
+      "name": "K3D_BOW_PREVIEW_TARGET"
+    },
+    {
+      "children": [
+        0,
+        1
+      ],
+      "extras": {
+        "gltfUUID": "16f52afd-b9b3-48cd-a148-53b8fd7d2ef2"
+      },
+      "name": "K3D_BOW_STOPPED_PREVIEW"
+    },
+    {
+      "children": [
+        2
+      ],
+      "extras": {
+        "EntityComponentPlugin": {
+          "4d3c5fa2-bef9-48cc-8b39-2fe8d128bf3c": {
+            "state": {
+              "botCount": 3,
+              "difficulty": "normal",
+              "scoreLimit": 10
+            },
+            "type": "BowGameComponent"
+          }
+        },
+        "gltfUUID": "88e34e12-5619-4a74-8677-680775c83c31",
+        "kite3dAuthoring": {
+          "id": "bow-demo-arena",
+          "role": "direct"
+        },
+        "kite3dBowArena": {
+          "runtimeOnly": true,
+          "seed": "BowArena.seededRandom:73429"
+        }
+      },
+      "name": "K3D_BOW_DEMO_ARENA"
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "extras": {
+        "rootSceneModelRoot": true
+      },
+      "name": "Scene",
+      "nodes": [
+        3
+      ]
+    }
+  ]
+}

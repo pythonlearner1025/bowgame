@@ -49,6 +49,10 @@ interface SceneRestoreState {
 /** Arena ownership and scene integration settings for one runtime lifetime. */
 export interface GameWorldOptions {
   arenaRoot?: Group;
+  runtimeParent?: Object3D;
+  authoredPreviewRoot?: Object3D;
+  collisionTestEnabled?: boolean;
+  isOnline?: boolean;
   ownsArena: boolean;
 }
 
@@ -135,6 +139,23 @@ const disposeArena = (group: Group): void => {
   textures.forEach((texture) => texture.dispose());
 };
 
+// Hardware rendering retains the original quality cap from the standalone player.
+const HARDWARE_RENDER_SCALE_LIMIT = 1.1;
+
+// Half scale preserves detail while meeting Kite's 30-frame budget under software rasterizers.
+const SOFTWARE_RENDER_SCALE_LIMIT = 0.5;
+
+const SOFTWARE_RENDERER_NAMES = ['swiftshader', 'llvmpipe', 'softpipe', 'lavapipe', 'software'];
+
+function usesSoftwareRenderer(viewer: ThreeViewer): boolean {
+  const context = viewer.renderManager.renderer.getContext();
+  const rendererInformation = context.getExtension('WEBGL_debug_renderer_info');
+  const rendererParameter = rendererInformation?.UNMASKED_RENDERER_WEBGL ?? context.RENDERER;
+  const rendererName = String(context.getParameter(rendererParameter)).toLowerCase();
+
+  return SOFTWARE_RENDERER_NAMES.some((name) => rendererName.includes(name));
+}
+
 /** Manages the static arena and scene resources shared by all gameplay systems. */
 export class GameWorld {
   root = new Group();
@@ -144,6 +165,11 @@ export class GameWorld {
 
   private arenaRoot?: Group;
   private ownsArena: boolean;
+  private runtimeParent: Object3D;
+  private authoredPreviewRoot?: Object3D;
+  private collisionTestEnabled: boolean;
+  private isOnline: boolean;
+  private usesSoftwareRendering = false;
   private hidden: HiddenObjectState[] = [];
   private sceneRestore: SceneRestoreState | null = null;
 
@@ -159,6 +185,10 @@ export class GameWorld {
   ) {
     this.arenaRoot = options.arenaRoot;
     this.ownsArena = options.ownsArena;
+    this.runtimeParent = options.runtimeParent ?? viewer.scene;
+    this.authoredPreviewRoot = options.authoredPreviewRoot;
+    this.collisionTestEnabled = options.collisionTestEnabled ?? false;
+    this.isOnline = options.isOnline ?? false;
   }
 
   /**
@@ -201,18 +231,25 @@ export class GameWorld {
    */
   start(config: BowGameConfig): void {
     const scene = this.viewer.scene;
+    this.usesSoftwareRendering = usesSoftwareRenderer(this.viewer);
     this.sceneRestore = {
       background: scene.background,
       fog: scene.fog,
       renderScale: this.viewer.renderManager.renderScale,
     };
-    this.viewer.renderManager.renderScale = Math.min(this.viewer.renderManager.renderScale, 1.1);
+    const renderScaleLimit = this.usesSoftwareRendering
+      ? SOFTWARE_RENDER_SCALE_LIMIT
+      : HARDWARE_RENDER_SCALE_LIMIT;
+    this.viewer.renderManager.renderScale = Math.min(
+      this.viewer.renderManager.renderScale,
+      renderScaleLimit,
+    );
     scene.background = new Color(0xa5b3b4);
     scene.fog = new FogExp2(0xa5b3b4, 0.012);
     this.hideEditorObjects();
     this.root = new Group();
-    this.root.name = 'K3D_BOW_RUNTIME';
-    scene.add(this.root);
+    this.root.name = 'K3D_BOW_RUNTIME_WORLD';
+    this.runtimeParent.add(this.root);
     this.prepareArena(config);
     this.trails = new BowArrowTrails();
     this.root.add(this.trails.root);
@@ -220,11 +257,13 @@ export class GameWorld {
   }
 
   private hideEditorObjects(): void {
-    for (const object of this.viewer.scene.modelRoot.children) {
-      if (object.name !== 'K3D_BOW_DEMO_ARENA') {
-        this.hidden.push({ object, visible: object.visible });
-        object.visible = false;
-      }
+    const previewRoot =
+      this.authoredPreviewRoot ??
+      this.viewer.scene.modelRoot.children.find((object) => object.name === 'K3D_BOW_DEMO_ARENA');
+
+    if (previewRoot) {
+      this.hidden.push({ object: previewRoot, visible: previewRoot.visible });
+      previewRoot.visible = false;
     }
   }
 
@@ -252,7 +291,7 @@ export class GameWorld {
     this.root.add(sky);
     const sun = new DirectionalLight(0xffdeb0, 3.3);
     sun.position.set(-16, 28, 12);
-    sun.castShadow = true;
+    sun.castShadow = !this.usesSoftwareRendering;
     sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, {
       left: -34,
@@ -303,10 +342,7 @@ export class GameWorld {
    * @returns Serializable collision distances, player state, spawns, and BVH statistics.
    */
   inspectCollision(options: CollisionInspectionOptions): object {
-    if (
-      typeof location === 'undefined' ||
-      !new URLSearchParams(location.search).has('collisionTest')
-    ) {
+    if (!this.collisionTestEnabled) {
       throw new Error('Collision test hook disabled');
     }
 
@@ -363,12 +399,20 @@ export class GameWorld {
         ? this.collision?.bvh.closestPointToPoint(impactPoint)?.distance
         : null,
       stats: this.collision?.stats(),
-      spawns: Array.from({ length: BOW_ROOM_CAP }, (_unusedValue, i) => {
+      spawns: Array.from({ length: this.getInspectionSpawnCount(state) }, (_unusedValue, i) => {
         const spawn = getSlotSpawn(i);
 
         return { position: spawn.toArray(), penetration: this.collision?.penetration(spawn) };
       }),
     };
+  }
+
+  private getInspectionSpawnCount(state: GameState): number {
+    if (this.isOnline) {
+      return BOW_ROOM_CAP;
+    }
+
+    return (state.config?.botCount ?? 0) + 1;
   }
 
   private getRockDistance(impactPoint: Vector3 | null): number {
