@@ -2,7 +2,7 @@
 
 ## What this repository is
 
-This is a published-Kite3D 0.13.2 project containing the Timber / Ash bow deathmatch. It uses
+This is a published-Kite3D 0.13.2 project containing the BOWGAME bow deathmatch. It uses
 only public project/browser APIs from `threepipe@0.5.1` and `@blitzdev/engine@0.13.2`. The page
 runtime is Kite3D; the Cloudflare Worker is a separately deployed WebSocket-only room service.
 

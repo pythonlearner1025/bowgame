@@ -134,7 +134,7 @@ test('hosted player enters the real arena and advances bot combat', async ({ pag
   expect(layout.board.x).toBeGreaterThan(950);
   expect(layout.feed.y).toBeGreaterThan(layout.board.bottom);
   const visibleText = await hud.innerText();
-  expect(visibleText).not.toMatch(/TIMBER|ASH.*LOCAL|WASD|FIELD BOW|ARROWS|HP|MS RTT/);
+  expect(visibleText).not.toMatch(/BOWGAME|ASH.*LOCAL|WASD|FIELD BOW|ARROWS|HP|MS RTT/);
   await page.screenshot({ path: resolve(root, 'evidence/gritty-hud-gameplay.png') });
   const after = await page.evaluate(() => window.__KITE_BOW_GAME__?.getState());
   expect(after?.bots).toHaveLength(EXPECTED_SOLO_BOT_COUNT);

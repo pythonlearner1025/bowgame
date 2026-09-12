@@ -5,10 +5,12 @@ import { loadSystem } from './helpers/bow-system-harness.mjs';
 
 const { NetworkGlue } = await loadSystem('NetworkGlue');
 const { GameState } = await loadSystem('GameState');
+const { BowSettings } = await loadSystem('BowSettings');
 const { Vector3 } = await import('threepipe');
 
 test('NetworkGlue applies welcome state and publishes local state at 20 Hz', () => {
   const state = new GameState();
+  const settings = new BowSettings();
   const sentStates = [];
   const session = {
     start() {},
@@ -24,7 +26,7 @@ test('NetworkGlue applies welcome state and publishes local state at 20 Hz', () 
     getName: () => 'ARCHER',
     setName() {},
   };
-  const glue = new NetworkGlue(state, session, {
+  const glue = new NetworkGlue(state, session, settings, {
     getSlotSpawn: () => new Vector3(3, 0, 4),
     syncRemotePlayers() {},
     spawnArrow() {},
@@ -68,4 +70,23 @@ test('NetworkGlue applies welcome state and publishes local state at 20 Hz', () 
   assert.equal(state.deaths, 2);
   assert.equal(sentStates.length, 1);
   assert.equal(sentStates[0].seq, 1);
+});
+
+test('NetworkGlue detects walking through rebound movement settings.', () => {
+  const state = new GameState();
+  const settings = new BowSettings();
+  const sentStates = [];
+  const session = {
+    sendState(value) {
+      sentStates.push(value);
+    },
+  };
+  const glue = new NetworkGlue(state, session, settings, {});
+
+  settings.rebind('moveForward', 'KeyI');
+  state.keys.add('KeyI');
+  glue.step(0.05);
+
+  assert.equal(sentStates.length, 1);
+  assert.equal(sentStates[0].anim, 'walk');
 });

@@ -1,6 +1,7 @@
 import { ArrowSystem } from './ArrowSystem.js';
 import { BotSystem } from './BotSystem.js';
 import { BowController } from './BowController.js';
+import { BowSettings } from './BowSettings.js';
 import { CombatRules } from './CombatRules.js';
 import { EntryOverlay } from './EntryOverlay.js';
 import { GameState, } from './GameState.js';
@@ -18,6 +19,7 @@ const FIXED_STEP_SECONDS = 1 / FIXED_STEPS_PER_SECOND;
 export class BowGameRuntime {
     viewer;
     state;
+    settings;
     world;
     arrows;
     bots;
@@ -40,6 +42,7 @@ export class BowGameRuntime {
     constructor(viewer, options = {}) {
         this.viewer = viewer;
         this.state = new GameState(options.config);
+        this.settings = new BowSettings();
         this.isPaused = options.isPaused ?? (() => false);
         this.performanceStats = options.performanceStats ?? null;
         this.world = new GameWorld(viewer, {
@@ -71,7 +74,7 @@ export class BowGameRuntime {
             sendDeath: (killerId) => this.network.sendDeath(killerId),
             updateCamera: () => this.playerController.updateCamera(),
         });
-        this.network = new NetworkGlue(this.state, options.session ?? null, {
+        this.network = new NetworkGlue(this.state, options.session ?? null, this.settings, {
             getSlotSpawn: (slot) => this.world.getSlotSpawn(this.requiredConfig, slot),
             syncRemotePlayers: (snapshot) => this.remotePlayers.sync(snapshot),
             spawnArrow: (position, velocity, spawnOptions) => this.arrows.spawn(position, velocity, spawnOptions),
@@ -92,6 +95,7 @@ export class BowGameRuntime {
             },
         });
         this.entry = new EntryOverlay(viewer, this.state, () => this.requiredConfig, {
+            settings: this.settings,
             isOnline: () => this.network.isOnline(),
             isConnected: () => this.network.isConnected(),
             getNetworkName: () => this.network.getName(),
@@ -105,6 +109,7 @@ export class BowGameRuntime {
             world: this.world,
             bow: this.bow,
             bots: this.bots,
+            settings: this.settings,
             getConfig: () => this.requiredConfig,
             callbacks: {
                 enter: () => this.entry.enter(),
@@ -112,6 +117,7 @@ export class BowGameRuntime {
                 stepRespawn: () => this.combat.stepRespawn(),
                 getAudio: () => this.state.sounds,
                 isOnline: () => this.network.isOnline(),
+                isCapturingKey: () => this.entry.isCapturingKey(),
             },
         });
     }

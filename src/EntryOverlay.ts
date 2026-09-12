@@ -11,11 +11,14 @@ import {
   sanitizePlayerNameInput,
   savePlayerName,
 } from './BowPlayerName.js';
+import type { BowSettings } from './BowSettings.js';
 import type { BowGameConfig, GameState } from './GameState.js';
 import { BOW_ROOM_CAP } from './BowProtocol.js';
+import { SettingsPanel } from './SettingsPanel.js';
 
-/** Network and match actions invoked by the entry overlay. */
+/** Settings dependency plus network and match actions used by the entry overlay. */
 export interface EntryOverlayCallbacks {
+  settings: BowSettings;
   isOnline: () => boolean;
   isConnected: () => boolean;
   getNetworkName: () => string | null;
@@ -27,6 +30,7 @@ export interface EntryOverlayCallbacks {
 export class EntryOverlay {
   private elements: Record<string, HTMLElement> = {};
   private values: Record<string, string | boolean> = Object.create(null);
+  private settingsPanel: SettingsPanel;
 
   /**
    * Connects modal UI to the viewer, shared state, match settings, and network actions.
@@ -41,7 +45,9 @@ export class EntryOverlay {
     private state: GameState,
     private getConfig: () => BowGameConfig,
     private callbacks: EntryOverlayCallbacks,
-  ) {}
+  ) {
+    this.settingsPanel = new SettingsPanel(callbacks.settings);
+  }
 
   /**
    * Builds the centered modal, name field, and entry controls inside the HUD overlay.
@@ -58,7 +64,7 @@ export class EntryOverlay {
       'title',
       modal,
       'font-size:27px;font-weight:800;letter-spacing:5px;margin-bottom:12px',
-      'TIMBER / ASH',
+      'BOWGAME',
     );
     title.removeAttribute('data-hud');
     const description = this.createElement(
@@ -69,6 +75,7 @@ export class EntryOverlay {
     description.removeAttribute('data-hud');
     this.makeNameField(modal);
     this.makeButtons(modal);
+    this.settingsPanel.start(modal);
     this.update();
   }
 
@@ -171,6 +178,8 @@ export class EntryOverlay {
 
   /** Applies the entered name, requests pointer lock, activates play, and resumes audio. */
   enter(): void {
+    this.settingsPanel.cancelCapture();
+
     if (this.state.preview) {
       this.callbacks.restart();
     }
@@ -230,6 +239,8 @@ export class EntryOverlay {
 
   /** Updates modal visibility, text, and controls only when rendered values change. */
   update(): void {
+    this.settingsPanel.update();
+
     if (this.callbacks.isOnline()) {
       this.updateOnline();
     } else {
@@ -246,11 +257,20 @@ export class EntryOverlay {
     return this.callbacks.isOnline();
   }
 
+  /**
+   * Returns whether the settings panel is reserving the next key press.
+   *
+   * @returns Whether gameplay key handling must yield to binding capture.
+   */
+  isCapturingKey(): boolean {
+    return this.settingsPanel.isCapturingKey();
+  }
+
   private updateSolo(): void {
     const config = this.getConfig();
     const show = (!this.state.active || Boolean(this.state.winner)) && !this.state.preview;
     this.setStyle('modal', 'display', show ? 'block' : 'none');
-    let title = 'TIMBER / ASH';
+    let title = 'BOWGAME';
     let description = `${config.botCount} hunters. First to ${config.scoreLimit} eliminations.\nHold to draw. Release to fire. Lead moving targets.\nArrows drop with distance. Rocks stop arrows.\nHeadshots deal extra damage. Respawn is automatic.`;
 
     if (this.state.winner) {
@@ -277,7 +297,7 @@ export class EntryOverlay {
     const isBlocked = ['full', 'reconnecting', 'disconnected', 'connecting'].includes(status);
     const show = !this.state.active || Boolean(this.state.winner) || isBlocked;
     this.setStyle('modal', 'display', show ? 'block' : 'none');
-    let title = 'TIMBER / ASH';
+    let title = 'BOWGAME';
 
     if (status === 'full') {
       title = 'SERVER FULL';
@@ -372,6 +392,7 @@ export class EntryOverlay {
 
   /** Clears detached element references after the parent HUD overlay is removed. */
   stop(): void {
+    this.settingsPanel.stop();
     this.elements = {};
     this.values = Object.create(null);
   }
